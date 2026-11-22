@@ -1,0 +1,2353 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JS Срез №1 и №2 — Аудио-тренажёр</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.55);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(1.1); }
+    }
+    .speaking-pulse {
+      animation: pulseGlow 1.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+
+  <!-- Мобильный оверлей для бокового списка вопросов -->
+  <div id="mobileSidebarOverlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-30 hidden lg:hidden" onclick="toggleSidebar(false)"></div>
+
+  <!-- Мобильный оверлей для Drawer настроек голоса и пауз -->
+  <div id="mobileSettingsOverlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 hidden md:hidden" onclick="toggleMobileSettings(false)"></div>
+
+  <div class="min-h-screen flex flex-col lg:flex-row max-w-[1600px] mx-auto">
+
+    <!-- Боковая панель со списком вопросов, срезами, темами и экспортом/импортом JSON -->
+    <aside id="sidebar" class="fixed lg:sticky top-0 left-0 z-40 h-screen w-80 sm:w-96 bg-slate-900 border-r border-slate-800 flex flex-col transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out shrink-0">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs shrink-0">JS</span>
+            <h1 id="sidebarTitle" class="font-bold text-sm sm:text-base tracking-tight truncate">Срез №2 · Аудио-студия</h1>
+          </div>
+          <p class="text-xs text-slate-400 mt-1" id="progressText">Выучено в срезе: 0 из 0 (0%)</p>
+        </div>
+        <button type="button" onclick="toggleSidebar(false)" class="lg:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Закрыть список">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Прогресс-бар по текущему срезу -->
+      <div class="px-4 pt-3 pb-2">
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-emerald-500 transition-all duration-300 rounded-full" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Переключатель среза, поиск, фильтр по теме и статусу -->
+      <div class="px-4 py-2.5 space-y-2.5 border-b border-slate-800">
+        <div class="flex flex-col gap-1">
+          <label for="sidebarSliceSelect" class="text-[11px] font-medium text-slate-400">Активный срез</label>
+          <select id="sidebarSliceSelect" onchange="handleSliceChange(this.value)" class="w-full text-xs font-medium rounded-xl bg-indigo-950/60 border border-indigo-700/70 px-3 py-2 text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+        </div>
+
+        <div class="relative">
+          <input id="searchInput" type="text" oninput="applyFilters()" placeholder="Поиск по вопросам, ответам и ошибкам..." class="w-full text-xs rounded-xl bg-slate-800 border border-slate-700 pl-8 pr-7 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/></svg>
+          <button type="button" id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2 top-2 text-slate-400 hover:text-slate-200 text-xs px-1" title="Очистить поиск">✕</button>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label for="topicFilter" class="text-[11px] font-medium text-slate-400">Фильтр по теме среза</label>
+          <select id="topicFilter" onchange="syncTopicFromSidebar(this.value)" class="w-full text-xs rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+        </div>
+
+        <div class="flex gap-1.5">
+          <button type="button" id="filterAllBtn" onclick="setStatusFilter('all')" class="flex-1 py-1.5 px-2 text-xs font-medium rounded-lg bg-indigo-600 text-white transition">Все</button>
+          <button type="button" id="filterHardBtn" onclick="setStatusFilter('hard')" class="flex-1 py-1.5 px-2 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">★ Повторить</button>
+          <button type="button" id="filterUnlearnedBtn" onclick="setStatusFilter('unlearned')" class="flex-1 py-1.5 px-2 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">Выучено / Нет</button>
+        </div>
+      </div>
+
+      <!-- Список вопросов -->
+      <div id="questionList" class="flex-1 overflow-y-auto p-2.5 space-y-1.5"></div>
+
+      <!-- Экспорт / Импорт JSON и сброс -->
+      <div class="p-3 border-t border-slate-800 bg-slate-900/95 space-y-2">
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="exportSlicesJson()" class="flex-1 py-2 px-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition text-center">
+            ↓ Экспорт JSON
+          </button>
+          <label class="flex-1 py-2 px-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition text-center cursor-pointer">
+            ↑ Импорт JSON
+            <input type="file" id="importJsonInput" accept=".json,application/json" onchange="importSlicesJson(event)" class="hidden" />
+          </label>
+          <button type="button" onclick="resetCustomData()" title="Сбросить данные к исходным Срезам №1 и №2" class="py-2 px-2.5 rounded-xl border border-rose-900/60 bg-rose-950/30 text-rose-300 hover:bg-rose-900/40 text-xs font-medium transition">
+            Сброс
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Основная область -->
+    <main class="flex-1 flex flex-col min-w-0">
+
+      <!-- Верхняя панель: переключатель срезов, быстрый фильтр тем, кнопка добавления среза/вопроса -->
+      <header class="sticky top-0 z-20 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-6 py-2.5 sm:py-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <button type="button" onclick="toggleSidebar(true)" class="lg:hidden p-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 shrink-0" aria-label="Открыть список вопросов">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+
+            <select id="headerSliceSelect" onchange="handleSliceChange(this.value)" aria-label="Выбор среза" class="text-xs sm:text-sm font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer shrink-0"></select>
+
+            <div class="flex items-center gap-2 min-w-0">
+              <span id="headerCounter" class="text-xs sm:text-sm font-semibold text-indigo-400 whitespace-nowrap">Вопрос 1 / 35</span>
+              <span class="hidden md:inline text-slate-700">|</span>
+              <span id="headerTopic" class="hidden md:inline text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 truncate">Тема</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button type="button" onclick="openBuilderModal('question')" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs">
+              <span>+</span>
+              <span>Срез / Вопрос</span>
+            </button>
+
+            <button type="button" id="shuffleBtn" onclick="toggleShuffle()" title="Перемешать порядок вопросов" class="p-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition flex items-center gap-1.5 text-xs font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+              <span class="hidden xl:inline">Вперемешку</span>
+            </button>
+
+            <button type="button" onclick="toggleTheme()" title="Сменить тему" class="p-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition">
+              <svg id="sunIcon" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+              <svg id="moonIcon" class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Быстрый выбор темы (dropdown + pills) -->
+        <div class="mt-2.5 pt-2 border-t border-slate-800/80 space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="quickTopicSelect" class="text-[11px] font-medium text-slate-400 shrink-0">Тема:</label>
+            <select id="quickTopicSelect" onchange="syncTopicFromQuick(this.value)" class="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-1.5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-xs"></select>
+            <div id="topicPillsContainer" class="flex items-center gap-1.5 overflow-x-auto pb-0.5"></div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Контентная область: 0 горизонтальных отступов внешнего контейнера на мобильных (<=640px) -->
+      <div class="flex-1 px-0 sm:px-5 lg:px-8 py-2.5 sm:py-6 max-w-4xl w-full mx-auto space-y-2.5 sm:space-y-6">
+
+        <!-- Уведомление / fallback статус -->
+        <div id="alertBox" class="hidden p-3.5 sm:p-4 rounded-none sm:rounded-2xl bg-amber-500/10 border-y sm:border border-amber-500/30 text-amber-200 text-xs sm:text-sm flex items-start justify-between gap-3">
+          <div id="alertText" class="leading-relaxed"></div>
+          <button type="button" onclick="hideAlert()" class="text-amber-400 hover:text-amber-200 font-bold shrink-0">✕</button>
+        </div>
+
+        <!-- Панель управления аудиоплеером -->
+        <section class="bg-slate-900 border-y sm:border border-slate-800 rounded-none sm:rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-3">
+
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="flex items-center gap-1.5 sm:gap-2">
+              <button type="button" onclick="prevQuestion()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition shrink-0" title="Предыдущий вопрос (←)">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+              </button>
+
+              <button type="button" id="playPauseBtn" onclick="togglePlayPause()" class="flex-1 sm:flex-initial justify-center px-4 sm:px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition">
+                <svg id="playIcon" class="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <svg id="pauseIcon" class="w-4 h-4 sm:w-5 sm:h-5 hidden shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                <span id="playPauseLabel" class="truncate">Слушать вопрос</span>
+              </button>
+
+              <button type="button" onclick="stopAudio()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition shrink-0" title="Остановить">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+              </button>
+
+              <button type="button" onclick="nextQuestion()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition shrink-0" title="Следующий вопрос (→)">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
+
+              <!-- Кнопка открытия Drawer настроек на мобильных (<=768px) -->
+              <button type="button" onclick="toggleMobileSettings(true)" class="md:hidden px-3 py-2.5 rounded-xl border border-indigo-500/40 bg-indigo-950/50 hover:bg-indigo-900/60 text-xs font-semibold text-indigo-200 flex items-center gap-1.5 shrink-0" aria-label="Голос и паузы">
+                <span>⚙️</span>
+                <span>Голос и паузы</span>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:flex items-center gap-2">
+              <button type="button" onclick="repeatQuestion()" class="px-3 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-xs font-medium text-slate-200 transition text-center" title="Повторить вопрос (R)">
+                ↻ Повтор вопроса
+              </button>
+              <button type="button" onclick="playAnswerOnly()" class="px-3 py-2 rounded-xl border border-indigo-800/70 bg-indigo-950/50 hover:bg-indigo-900/60 text-xs font-medium text-indigo-300 transition text-center" title="Сразу озвучить ответ (Enter)">
+                🔊 Сразу ответ
+              </button>
+            </div>
+          </div>
+
+          <!-- Статус плеера -->
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0"></span>
+              <span id="playerStatusText" class="text-xs font-medium text-slate-200 truncate">Готов к тренировке</span>
+            </div>
+            <span id="ttsEngineBadge" class="hidden md:inline-flex text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">Web Speech API</span>
+          </div>
+
+          <!-- Таймер паузы на ваш ответ -->
+          <div id="pauseTimerBox" class="hidden items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-indigo-500/15 text-indigo-300 text-xs font-semibold">
+            <span id="pauseTimerLabel">Пауза на ваш ответ: 5с</span>
+            <button type="button" onclick="skipPauseToAnswer()" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition">Ответить сейчас →</button>
+          </div>
+
+          <div id="pauseProgressWrap" class="hidden w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="pauseProgressBar" class="h-full bg-indigo-500 transition-all duration-100 rounded-full" style="width: 100%"></div>
+          </div>
+
+          <!-- Контейнер настроек: в карточке на >=768px, в выдвижном Drawer снизу на <=768px -->
+          <div id="settingsDrawer" class="fixed md:static bottom-0 left-0 right-0 z-50 md:z-auto translate-y-full md:translate-y-0 transition-transform duration-200 ease-out bg-slate-900 md:bg-transparent rounded-t-2xl md:rounded-none border-t border-slate-800 p-4 md:p-0 md:pt-3 shadow-2xl md:shadow-none">
+            <div class="flex items-center justify-between mb-3 md:hidden">
+              <span class="text-sm font-bold text-white">⚙️ Голос и паузы</span>
+              <button type="button" onclick="toggleMobileSettings(false)" class="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold">Готово</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <!-- Выбор голоса -->
+              <div class="flex flex-col gap-1">
+                <label for="voiceSelect" class="text-[11px] font-medium text-slate-400">Голос диктора</label>
+                <select id="voiceSelect" onchange="handleVoiceChange()" class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-2.5 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate">
+                  <option value="">Загрузка голосов...</option>
+                </select>
+              </div>
+
+              <!-- Скорость речи -->
+              <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-[11px] font-medium text-slate-400">
+                  <label for="rateRange">Скорость речи</label>
+                  <span id="rateValue" class="text-indigo-400 font-semibold">1.05x</span>
+                </div>
+                <input id="rateRange" type="range" min="0.7" max="1.7" step="0.05" value="1.05" oninput="handleRateInput()" onchange="saveSettings()" class="accent-indigo-600 cursor-pointer h-2 bg-slate-700 rounded-lg mt-1.5" />
+              </div>
+
+              <!-- Пауза после вопроса (на ваш ответ) -->
+              <div class="flex flex-col gap-1">
+                <label for="thinkPauseSelect" class="text-[11px] font-medium text-slate-400">Пауза на ваш ответ</label>
+                <select id="thinkPauseSelect" onchange="saveSettings()" class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-2.5 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="0">Без паузы (0 сек)</option>
+                  <option value="3">3 секунды</option>
+                  <option value="5" selected>5 секунд</option>
+                  <option value="10">10 секунд</option>
+                  <option value="15">15 секунд</option>
+                  <option value="20">20 секунд</option>
+                  <option value="manual">Вручную (по кнопке)</option>
+                </select>
+              </div>
+
+              <!-- Автопереход после ответа -->
+              <div class="flex flex-col gap-1">
+                <label for="autoNextSelect" class="text-[11px] font-medium text-slate-400">После озвучки ответа</label>
+                <select id="autoNextSelect" onchange="saveSettings()" class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-2.5 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="3" selected>Следующий через 3 сек</option>
+                  <option value="5">Следующий через 5 сек</option>
+                  <option value="1">Следующий через 1 сек</option>
+                  <option value="stop">Останавливаться (1 вопрос)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Опциональный переключатель / статус локального движка Piper TTS -->
+            <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <label class="inline-flex items-center gap-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" id="piperModeToggle" onchange="togglePiperMode(this.checked)" class="accent-indigo-600 rounded" />
+                <span>Локальный режим Piper TTS (ONNX / WebAssembly)</span>
+              </label>
+              <span id="piperStatusText" class="text-[11px] text-slate-400">Активен системный Web Speech API (офлайн/браузер)</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Карточка текущего вопроса и ответа -->
+        <article class="bg-slate-900 border-y sm:border border-slate-800 rounded-none sm:rounded-2xl p-4 sm:p-7 shadow-xs space-y-5 sm:space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-2.5 pl-6 sm:pl-0">
+            <div class="flex items-center gap-2 min-w-0">
+              <span id="cardNumberBadge" class="px-2.5 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 font-bold text-xs shrink-0">#1</span>
+              <span id="cardCategoryBadge" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium text-xs truncate">Тема</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button type="button" id="markHardBtn" onclick="toggleHardCurrent()" class="px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-medium text-slate-300 flex items-center gap-1.5 hover:bg-slate-800 transition">
+                <span id="markHardIcon">☆</span>
+                <span>Повторить</span>
+              </button>
+              <button type="button" id="markLearnedBtn" onclick="toggleLearnedCurrent()" class="px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-medium text-slate-300 flex items-center gap-1.5 hover:bg-slate-800 transition">
+                <span id="markLearnedIcon">○</span>
+                <span>Выучено</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-2 px-3 sm:px-0">
+            <div class="text-xs uppercase tracking-wider font-semibold text-slate-500">Вопрос</div>
+            <h2 id="questionText" class="text-lg sm:text-xl font-bold leading-snug text-white"></h2>
+          </div>
+
+          <div class="pt-3 border-t border-slate-800 px-3 sm:px-0">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <span class="text-xs uppercase tracking-wider font-semibold text-emerald-400">Эталонный ответ (с учётом фидбэка)</span>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <!-- Регулятор размера шрифта ответа: A-, кликабельный бейдж размера, A+ -->
+                <div class="inline-flex items-center rounded-xl bg-slate-800 border border-slate-700 p-0.5" title="Размер шрифта ответа">
+                  <button type="button" onclick="changeAnswerFontSize(-1)" class="px-2 py-1 text-xs font-bold text-slate-300 hover:bg-slate-700 rounded-lg transition" aria-label="Уменьшить шрифт ответа">A−</button>
+                  <button type="button" onclick="toggleLargeAnswerFont()" id="fontSizeIndicator" class="px-2 py-1 text-[11px] font-mono font-semibold text-indigo-300 hover:bg-slate-700 rounded-lg transition" title="Нажмите для переключения между обычным и крупным размером (20px, как у вопроса)">15px</button>
+                  <button type="button" onclick="changeAnswerFontSize(1)" class="px-2 py-1 text-xs font-bold text-slate-300 hover:bg-slate-700 rounded-lg transition" aria-label="Увеличить шрифт ответа">A+</button>
+                </div>
+
+                <button type="button" id="toggleAnswerVisibilityBtn" onclick="toggleBlurAnswer()" class="text-xs font-medium px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-300 transition">
+                  Скрыть ответ
+                </button>
+              </div>
+            </div>
+
+            <div id="answerContainer" class="space-y-4 transition-all duration-200">
+              <div id="answerBody" style="font-size: 15px; line-height: 1.62;" class="text-slate-200 space-y-2.5"></div>
+
+              <!-- Частые ошибки и фидбэк ИИ-рекрутера -->
+              <div id="feedbackBox" class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs sm:text-sm text-amber-200 space-y-1">
+                <div class="font-semibold text-amber-300">Частые ошибки и фидбэк ИИ-рекрутера:</div>
+                <p id="feedbackText" class="leading-relaxed"></p>
+              </div>
+
+              <!-- Пример кода -->
+              <div id="codeBox" class="hidden rounded-xl overflow-hidden border border-slate-800 bg-slate-950 text-slate-100">
+                <div class="px-4 py-2 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between">
+                  <span class="text-[11px] font-mono text-slate-400">Пример кода</span>
+                  <button type="button" onclick="copyCodeSnippet()" id="copyCodeBtn" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium">Копировать</button>
+                </div>
+                <pre class="p-4 text-xs sm:text-sm font-mono overflow-x-auto leading-relaxed"><code id="codeContent"></code></pre>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Подсказка по горячим клавишам -->
+        <footer class="text-center text-xs text-slate-500 px-4 pb-8">
+          Горячие клавиши: <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Space</kbd> Старт/Пауза ·
+          <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">←</kbd>/<kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">→</kbd> Навигация ·
+          <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">R</kbd> Повтор вопроса ·
+          <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">Enter</kbd> Озвучить ответ
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <!-- Плавающие кнопки навигации по левому и правому краям окна -->
+  <button type="button" onclick="prevQuestion()" title="Предыдущий вопрос (←)" aria-label="Предыдущий вопрос"
+    class="fixed left-0.5 sm:left-3 top-1/2 -translate-y-1/2 z-20 w-7 h-12 sm:w-11 sm:h-16 rounded-r-xl sm:rounded-2xl bg-slate-900/90 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700/80 backdrop-blur-md shadow-lg flex items-center justify-center transition-all duration-150 opacity-85 hover:opacity-100 active:scale-95">
+    <svg class="w-4 h-4 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"/></svg>
+  </button>
+
+  <button type="button" onclick="nextQuestion()" title="Следующий вопрос (→)" aria-label="Следующий вопрос"
+    class="fixed right-0.5 sm:right-3 top-1/2 -translate-y-1/2 z-20 w-7 h-12 sm:w-11 sm:h-16 rounded-l-xl sm:rounded-2xl bg-slate-900/90 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700/80 backdrop-blur-md shadow-lg flex items-center justify-center transition-all duration-150 opacity-85 hover:opacity-100 active:scale-95">
+    <svg class="w-4 h-4 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5l7 7-7 7"/></svg>
+  </button>
+
+  <!-- Модальное окно добавления нового вопроса или нового среза -->
+  <div id="builderModal" class="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs hidden items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 sm:px-6 border-b border-slate-800 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <button type="button" id="tabAddQuestionBtn" onclick="switchBuilderTab('question')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white transition">
+            + Вопрос
+          </button>
+          <button type="button" id="tabAddSliceBtn" onclick="switchBuilderTab('slice')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+            + Новый срез
+          </button>
+        </div>
+        <button type="button" onclick="closeBuilderModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <div class="p-4 sm:p-6 overflow-y-auto space-y-4">
+        <!-- Вкладка 1: + Вопрос -->
+        <form id="addQuestionForm" onsubmit="submitNewQuestion(event)" class="space-y-3.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1">
+              <label for="newQSliceSelect" class="text-xs font-medium text-slate-300">Срез</label>
+              <select id="newQSliceSelect" required class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></select>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label for="newQTopicInput" class="text-xs font-medium text-slate-300">Тема</label>
+              <input id="newQTopicInput" type="text" required list="existingTopicsDatalist" placeholder="Например: JS Core / Context" class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+              <datalist id="existingTopicsDatalist"></datalist>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="newQTitleInput" class="text-xs font-medium text-slate-300">Текст вопроса</label>
+            <textarea id="newQTitleInput" rows="2" required placeholder="Введите формулировку вопроса..." class="text-xs sm:text-sm rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></textarea>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="newQAnswerInput" class="text-xs font-medium text-slate-300">Эталонный ответ</label>
+            <textarea id="newQAnswerInput" rows="4" required placeholder="Подробный эталонный ответ с учётом фидбэка..." class="text-xs sm:text-sm rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></textarea>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="newQTtsInput" class="text-xs font-medium text-slate-300">Текст для озвучки (опционально)</label>
+            <textarea id="newQTtsInput" rows="2" placeholder="Если оставить пустым, будет использован текст ответа без тегов..." class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></textarea>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1">
+              <label for="newQFeedbackInput" class="text-xs font-medium text-slate-300">Частые ошибки / фидбэк (опционально)</label>
+              <input id="newQFeedbackInput" type="text" placeholder="На что обратить внимание при ответе..." class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label for="newQCodeInput" class="text-xs font-medium text-slate-300">Пример кода (опционально)</label>
+              <textarea id="newQCodeInput" rows="2" placeholder="const example = true;" class="text-xs font-mono rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></textarea>
+            </div>
+          </div>
+
+          <div class="pt-2 flex justify-end gap-2">
+            <button type="button" onclick="closeBuilderModal()" class="px-4 py-2 rounded-xl border border-slate-700 text-xs font-medium text-slate-300">Отмена</button>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">Сохранить вопрос</button>
+          </div>
+        </form>
+
+        <!-- Вкладка 2: + Новый срез -->
+        <form id="addSliceForm" onsubmit="submitNewSlice(event)" class="hidden space-y-3.5">
+          <div class="flex flex-col gap-1">
+            <label for="newSliceNameInput" class="text-xs font-medium text-slate-300">Название нового среза</label>
+            <input id="newSliceNameInput" type="text" required placeholder="Например: Срез №3 — Асинхронность и Event Loop" class="text-xs sm:text-sm rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="newSliceTopicInput" class="text-xs font-medium text-slate-300">Тема первого вопроса</label>
+            <input id="newSliceTopicInput" type="text" required placeholder="Например: Promises & Event Loop" class="text-xs rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="newSliceQInput" class="text-xs font-medium text-slate-300">Первый вопрос среза</label>
+            <textarea id="newSliceQInput" rows="2" required placeholder="Введите первый вопрос..." class="text-xs sm:text-sm rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></textarea>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="newSliceAInput" class="text-xs font-medium text-slate-300">Эталонный ответ</label>
+            <textarea id="newSliceAInput" rows="4" required placeholder="Введите эталонный ответ..." class="text-xs sm:text-sm rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"></textarea>
+          </div>
+
+          <div class="pt-2 flex justify-end gap-2">
+            <button type="button" onclick="closeBuilderModal()" class="px-4 py-2 rounded-xl border border-slate-700 text-xs font-medium text-slate-300">Отмена</button>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">Создать срез</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== Безопасное хранилище ====================
+    function safeStorageGet(key, fallback = null) {
+      try {
+        const val = window.localStorage.getItem(key);
+        return val !== null ? val : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function safeStorageSet(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch (e) {
+        // Игнорируем ошибку в изолированном iframe или приватном окне
+      }
+    }
+
+    function safeStorageGetJson(key, fallback) {
+      try {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function stripHtmlToPlainText(htmlOrText) {
+      const div = document.createElement('div');
+      div.innerHTML = String(htmlOrText || '');
+      return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeAnswerHtml(input) {
+      const trimmed = String(input || '').trim();
+      if (!trimmed) return '';
+      if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+      return trimmed
+        .split(/\n{2,}/)
+        .map(block => `<p>${block.replace(/\n/g, '<br/>')}</p>`)
+        .join('');
+    }
+
+    // ==================== Полный набор данных: Срез №1 (12) и Срез №2 (35) ====================
+    const INITIAL_SLICES = [
+      {
+        id: 'srez-1',
+        title: 'Срез №1',
+        questions: [
+          {
+            id: 's1-1',
+            number: 1,
+            category: 'Paradigms: Imperative & Declarative',
+            question: 'Что такое парадигма программирования и чем в общих чертах отличаются императивный и декларативный подходы?',
+            ttsQuestion: 'Срез первый, вопрос 1. Что такое парадигма программирования и чем в общих чертах отличаются императивный и декларативный подходы?',
+            answerHtml: `
+              <p><strong>Парадигма программирования</strong> — это система принципов, концепций и правил организации кода и управления состоянием программы.</p>
+              <ul class="list-disc pl-5 space-y-1.5">
+                <li><strong>Императивный подход</strong> описывает вычисления как <strong>последовательность команд, которые пошагово изменяют состояние программы</strong>: мы явно задаём порядок действий, циклы, ветвления и мутации состояния.</li>
+                <li><strong>Декларативный подход</strong> описывает <strong>желаемый результат</strong> («что нужно получить»), скрывая пошаговую механику выполнения и низкоуровневое управление состоянием за абстракциями, выражениями или рантаймом.</li>
+              </ul>
+            `,
+            ttsAnswer: 'Парадигма программирования — это система принципов и подходов к организации кода и управлению состоянием программы. Императивный подход задаёт вычисления как последовательность команд, которые пошагово меняют состояние программы. Декларативный подход описывает желаемый результат, скрывая детали пошагового выполнения за абстракциями.',
+            feedbackNote: 'Императивный подход — это последовательность команд, изменяющих состояние программы (а не «изменение кода»).',
+            code: `// Императивно: пошагово меняем состояние в цикле
+const resImperative = [];
+for (let i = 0; i < nums.length; i++) {
+  if (nums[i] > 10) resImperative.push(nums[i] * 2);
+}
+
+// Декларативно: описываем итоговое преобразование
+const resDeclarative = nums.filter(n => n > 10).map(n => n * 2);`
+          },
+          {
+            id: 's1-2',
+            number: 2,
+            category: 'Paradigms: Imperative & Declarative',
+            question: 'В чём разница между императивным и декларативным подходами к обновлению интерфейса и какие преимущества даёт каждый из них?',
+            ttsQuestion: 'Срез первый, вопрос 2. В чём разница между императивным и декларативным подходами к обновлению интерфейса и какие преимущества даёт каждый из них?',
+            answerHtml: `
+              <ul class="list-disc pl-5 space-y-1.5">
+                <li><strong>Императивное обновление UI:</strong> разработчик сам находит DOM-элементы и вручную вызывает команды изменения DOM (<code>createElement</code>, <code>textContent</code>, <code>classList</code>, <code>appendChild</code>/<code>remove</code>) при изменении данных.</li>
+                <li><strong>Декларативное обновление UI (например, React):</strong> <strong>разработчик инициирует изменение состояния</strong>, а <strong>React согласует представление</strong> (сравнивает деревья и применяет изменения к DOM) и обновляет интерфейс на основе текущего состояния.</li>
+              </ul>
+              <p><strong>Преимущества:</strong> декларативный подход снижает ручную синхронизацию DOM со стейтом и упрощает масштабирование UI; императивный даёт точечный контроль над конкретными узлами, фокусом, скроллом или анимациями.</p>
+            `,
+            ttsAnswer: 'При императивном обновлении интерфейса разработчик вручную находит узлы и меняет ДОМ командами. При декларативном подходе разработчик инициирует изменение состояния, а Реакт согласует представление и обновляет интерфейс. Декларативный подход упрощает поддержку состояния и разметки, а императивный удобен для точечного управления конкретными узлами.',
+            feedbackNote: 'Изменение состояния инициирует разработчик; React согласует представление и обновляет интерфейс, но не управляет состоянием вместо разработчика.',
+            code: ''
+          },
+          {
+            id: 's1-3',
+            number: 3,
+            category: 'Paradigms: Imperative & Declarative',
+            question: 'Представьте интерфейс со списком, который меняется при фильтрации данных. Как бы вы объяснили управление состоянием и обновление интерфейса в императивном и декларативном подходах? Какие сложности могут возникнуть при каждом подходе?',
+            ttsQuestion: 'Срез первый, вопрос 3. Представьте интерфейс со списком при фильтрации данных: состояние и обновление в императивном и декларативном подходах и сложности обоих.',
+            answerHtml: `
+              <p><strong>Сравнение обновления списка при фильтрации:</strong></p>
+              <ul class="list-disc pl-5 space-y-1.5">
+                <li><strong>Императивно:</strong> храним массив и значение фильтра, при изменении фильтра вручную удаляем/скрываем ненужные узлы и создаём/вставляем новые DOM-элементы для подходящих элементов.</li>
+                <li><strong>Декларативно (React):</strong> храним исходные данные и фильтр в состоянии, вычисляем отфильтрованный список и рендерим его через <code>map</code> с <code>key</code>.</li>
+              </ul>
+              <p><strong>Ключи (<code>key</code>):</strong> ключи должны быть уникальными <strong>среди соседних элементов</strong> списка (не обязательно глобально по всему приложению); индексы массива допустимы для неизменяемых списков, но при фильтрации/перестановке/удалении могут привязать состояние не к тому элементу.</p>
+              <p><strong>Сложности:</strong> в императивном подходе легко допустить рассинхрон DOM и данных или забыть убрать старые узлы/обработчики; в декларативном — риск <strong>устаревшего состояния (stale state)</strong> в колбэках/эффектах и лишних вычислений при частой фильтрации.</p>
+            `,
+            ttsAnswer: 'В императивном подходе при фильтрации мы вручную перестраиваем или скрываем элементы в ДОМ. В декларативном подходе в Реакте мы обновляем состояние фильтра, вычисляем отфильтрованный список и рендерим его с ключами кей. Ключи достаточно делать уникальными среди соседних элементов, а индексы подходят для неизменяемых списков. Императивный подход грозит ручным рассинхроном ДОМ, а декларативный — риском устаревшего состояния и лишних перерисовок.',
+            feedbackNote: 'Опишите конкретное сравнение обновления списка, уникальность key среди соседей (индексы — для неизменяемых списков) и сложности обоих подходов, включая устаревшее состояние.',
+            code: `const [query, setQuery] = useState('');
+const filtered = useMemo(
+  () => items.filter(x => x.name.toLowerCase().includes(query.toLowerCase())),
+  [items, query]
+);
+return filtered.map(item => <li key={item.id}>{item.name}</li>);`
+          },
+          {
+            id: 's1-4',
+            number: 4,
+            category: 'Functional Programming',
+            question: 'Что такое чистая функция и почему её использование полезно при разработке React-компонентов?',
+            ttsQuestion: 'Срез первый, вопрос 4. Что такое чистая функция и почему её использование полезно при разработке Реакт-компонентов?',
+            answerHtml: `
+              <p><strong>Чистая функция</strong> при одинаковых аргументах всегда возвращает один и тот же результат и <strong>не имеет побочных эффектов</strong> (не изменяет внешние переменные, объекты/массивы по ссылке, DOM, сеть, хранилища или глобальное состояние).</p>
+              <p>В React чистые функции рендера делают интерфейс предсказуемым, упрощают unit-тестирование и позволяют React безопасно повторно вызывать компоненты или откладывать рендер без непредсказуемых побочных эффектов (которые выносятся в <code>useEffect</code> или обработчики событий).</p>
+            `,
+            ttsAnswer: 'Чистая функция всегда возвращает одинаковый результат на одинаковых аргументах и не производит побочных эффектов — не меняет внешние данные, переданные объекты, ДОМ или глобальное состояние. В Реакте чистота рендера даёт предсказуемость, удобное тестирование и безопасные повторные рендеры.',
+            feedbackNote: 'Обязательно упоминайте отсутствие побочных эффектов вместе с детерминированностью.',
+            code: ''
+          },
+          {
+            id: 's1-5',
+            number: 5,
+            category: 'Functional Programming',
+            question: 'Что такое функтор в функциональном программировании и как преобразование массива с помощью map иллюстрирует эту идею?',
+            ttsQuestion: 'Срез первый, вопрос 5. Что такое функтор в функциональном программировании и как преобразование массива с помощью мэп иллюстрирует эту идею?',
+            answerHtml: `
+              <p><strong>Функтор</strong> — это контейнер (контекст со значением), реализующий отображение (аналог <code>map</code>), которое применяет функцию к значению внутри контейнера и возвращает <strong>новый контейнер той же структуры</strong>.</p>
+              <p><code>Array.prototype.map</code> иллюстрирует функтор: массив выступает контекстом, <code>map</code> преобразует каждый элемент функцией колбэка и возвращает <strong>новый массив</strong> той же длины, не мутируя исходный.</p>
+            `,
+            ttsAnswer: 'Функтор — это контейнер со значением, который применяет функцию к значению внутри себя и возвращает новый контейнер той же формы. Метод мэп на массиве иллюстрирует это: он применяет функцию к каждому элементу и возвращает новый массив без изменения исходного.',
+            feedbackNote: 'Функтор сохраняет структуру контейнера и возвращает новый контейнер со значением.',
+            code: `const doubled = [1, 2, 3].map(x => x * 2); // [2, 4, 6]`
+          },
+          {
+            id: 's1-6',
+            number: 6,
+            category: 'Functional Programming',
+            question: 'Чем монада отличается от функтора и как она помогает последовательно выполнять вычисления, каждое из которых может не вернуть результат? Объясните на словах на примере проверки пользовательских данных.',
+            ttsQuestion: 'Срез первый, вопрос 6. Чем монада отличается от функтора и как она помогает последовательно проверять пользовательские данные, если шаг может не вернуть результат?',
+            answerHtml: `
+              <p><strong>Монада vs функтор:</strong> функтор применяет функцию к значению внутри контейнера, а монада дополнительно связывает шаги (<code>flatMap</code>/<code>chain</code>), разворачивая вложенные контейнеры, и предоставляет операцию <strong><code>of</code></strong>, которая <strong>помещает значение в контекст монады</strong> (а не оборачивает функции).</p>
+              <p><strong>Остановка при отсутствии значения и пример проверки данных:</strong> прерывание цепочки при отсутствии значения свойственно <strong>конкретным реализациям монад, например <code>Maybe</code></strong>, а не любой монаде в целом. При проверке пользовательских данных (например, email, возраст, роль) мы оборачиваем ввод в <code>Maybe.of(input)</code> и по цепочке запускаем проверки: если какой-то шаг возвращает пустое значение (<code>Nothing</code>), последующие проверки пропускаются, и цепочка безопасно завершается пустым результатом.</p>
+            `,
+            ttsAnswer: 'Монада связывает шаги через флэт-мэп, чтобы не создавать вложенные контейнеры, а метод оф помещает значение в контекст монады, а не оборачивает функции. Остановка при отсутствии значения характерна для конкретных монад вроде Мэйби. При проверке данных пользователя мы кладём ввод через оф в Мэйби и последовательно проверяем формат почты, возраст и права: если шаг не прошёл и вернул пустой контекст, следующие проверки не выполняются.',
+            feedbackNote: 'Метод of кладёт значение в контекст монады (не оборачивает функции); остановка при отсутствии значения — свойство конкретной реализации (например, Maybe), а не любой монады.',
+            code: ''
+          },
+          {
+            id: 's1-7',
+            number: 7,
+            category: 'Context',
+            question: 'Что означает контекст вызова функции (this) в JavaScript и от чего зависит его значение?',
+            ttsQuestion: 'Срез первый, вопрос 7. Что означает контекст вызова функции зис в ДжаваСкрипт и от чего зависит его значение?',
+            answerHtml: `
+              <p><strong>Контекст вызова (<code>this</code>)</strong> — это объект, с которым связывается выполнение функции. Для обычных функций значение <code>this</code> зависит от <strong>способа вызова в момент вызова</strong>:</p>
+              <ul class="list-disc pl-5 space-y-1">
+                <li><code>obj.method()</code> — <code>this</code> указывает на <code>obj</code>.</li>
+                <li>Обычный вызов <code>fn()</code> — <code>undefined</code> в строгом режиме/модулях или <code>window</code> в нестрогом режиме браузера.</li>
+                <li><code>new Fn()</code> — новый создаваемый объект.</li>
+                <li><code>call</code>, <code>apply</code>, <code>bind</code> — явно переданный контекст.</li>
+                <li>Стрелочные функции берут <code>this</code> лексически из внешнего окружения, где они созданы.</li>
+              </ul>
+            `,
+            ttsAnswer: 'Контекст вызова зис — это объект, с которым связан вызов функции. У обычных функций он зависит от способа вызова: при вызове как метод объекта равен этому объекту, при обычном вызове в строгом режиме равен андефайнд, при вызове с нью равен новому объекту, а через колл, эпплай и байн задаётся явно. У стрелочных функций зис берётся из внешнего окружения.',
+            feedbackNote: 'У обычных функций this определяется способом вызова, у стрелочных — лексическим окружением.',
+            code: ''
+          },
+          {
+            id: 's1-8',
+            number: 8,
+            category: 'Context',
+            question: 'Почему метод объекта может потерять свой this, если передать его как колбэк, и какими способами можно сохранить нужный контекст?',
+            ttsQuestion: 'Срез первый, вопрос 8. Почему метод объекта теряет зис при передаче как колбэк и как сохранить контекст?',
+            answerHtml: `
+              <p>При передаче метода как колбэка (например, в <code>setTimeout(obj.method, 0)</code> или <code>addEventListener</code>) передаётся сама функция без привязки к объекту; при последующем вызове без точки <strong>теряется связь вызова с объектом</strong>, поэтому <code>this</code> становится <code>undefined</code> (в strict mode) или другим объектом.</p>
+              <p>Сохранить контекст можно через <code>fn.bind(obj)</code>, стрелочную функцию-обёртку <code>() =&gt; obj.method()</code>, стрелочное свойство класса или <code>bind</code> в конструкторе.</p>
+            `,
+            ttsAnswer: 'Когда метод передают как колбэк, при вызове без объекта теряется связь вызова с исходным объектом, поэтому зис становится андефайнд в строгом режиме или другим объектом. Сохранить его можно через bind, стрелочную обёртку или стрелочный метод класса.',
+            feedbackNote: 'Уточните, что при передаче метода как колбэка теряется связь вызова с объектом.',
+            code: `const player = {
+  title: 'Track 1',
+  play() { return this.title; }
+};
+setTimeout(() => player.play(), 10);
+const boundPlay = player.play.bind(player);`
+          },
+          {
+            id: 's1-9',
+            number: 9,
+            category: 'Context',
+            question: 'Чем контекст вызова this в JavaScript отличается от React Context, и как с помощью React Context и хуков передать состояние вложенным компонентам без передачи пропсов через каждый уровень?',
+            ttsQuestion: 'Срез первый, вопрос 9. Чем зис в ДжаваСкрипт отличается от Реакт Контекст и как передать состояние через Реакт Контекст и хуки?',
+            answerHtml: `
+              <p><code>this</code> — механизм языка JavaScript для контекста вызова функции, а <strong>React Context</strong> — механизм React для передачи данных по дереву компонентов без проброса <code>props</code> через промежуточные уровни.</p>
+              <p>Для передачи состояния создаём контекст через <code>createContext(defaultValue)</code>, оборачиваем нужное поддерево в <code>&lt;MyContext.Provider value={{ state, setState }}&gt;</code> и читаем данные во вложенных компонентах через хук <code>useContext(MyContext)</code>.</p>
+            `,
+            ttsAnswer: 'Зис в ДжаваСкрипт — это контекст вызова функции, а Реакт Контекст — способ передать данные по дереву компонентов без проп-дриллинга. Мы создаём контекст через createContext, оборачиваем ветку компонентов в Провайдер с передачей состояния в value и читаем его в дочерних компонентах через хук useContext.',
+            feedbackNote: 'Не путайте React Context с замыканиями или парой «императивный/декларативный»; опишите createContext, Provider и useContext.',
+            code: `const AuthContext = createContext(null);
+
+function Tree() {
+  const { user } = useContext(AuthContext);
+  return <span>{user?.name}</span>;
+}`
+          },
+          {
+            id: 's1-10',
+            number: 10,
+            category: 'Garbage Collector',
+            question: 'Что такое сборщик мусора в JavaScript и по какому общему признаку он определяет, что память объекта можно освободить?',
+            ttsQuestion: 'Срез первый, вопрос 10. Что такое сборщик мусора в ДжаваСкрипт и по какому признаку он освобождает память?',
+            answerHtml: `
+              <p><strong>Сборщик мусора (GC)</strong> автоматически освобождает память в куче от объектов, которые больше не достижимы программой.</p>
+              <p>Общий признак — <strong>недостижимость от корней</strong> (глобальные объекты, активный стек вызовов и активные замыкания). По алгоритму <strong>Mark-and-Sweep</strong> сборщик сначала <strong>помечает достижимые объекты</strong> от корней (Mark), а затем <strong>освобождает непомеченные</strong> (Sweep).</p>
+            `,
+            ttsAnswer: 'Сборщик мусора автоматически освобождает память недостижимых объектов. По алгоритму Марк-энд-Свип он сначала помечает достижимые объекты от корней, а затем освобождает непомеченные объекты.',
+            feedbackNote: 'Mark-and-Sweep помечает достижимые объекты и освобождает непомеченные.',
+            code: ''
+          },
+          {
+            id: 's1-11',
+            number: 11,
+            category: 'Garbage Collector',
+            question: 'Как механизм достижимости связан со стеком вызовов и почему объект, на который больше не ссылается выполняющая функция, всё ещё может оставаться в памяти?',
+            ttsQuestion: 'Срез первый, вопрос 11. Как достижимость связана со стеком вызовов и почему объект может оставаться в памяти, если выполняющая функция на него уже не ссылается?',
+            answerHtml: `
+              <p>Локальные переменные и параметры функций в <strong>активном стеке вызовов</strong> являются корнями достижимости, пока функция выполняется; после выхода из функции её кадр снимается со стека.</p>
+              <p>Объект остаётся в памяти, если на него ведут ссылки из других объектов, коллекций, глобальных структур или из <strong>замыкания другой живой функции</strong> (замыкание удерживает данные только пока сама функция с этим замыканием достижима), либо объект ещё не собран текущим циклом GC.</p>
+            `,
+            ttsAnswer: 'Локальные переменные активного стека вызовов являются корнями достижимости, пока функция выполняется. Но объект остаётся в памяти, если на него ссылаются другие структуры или замыкание другой достижимой функции, либо он ещё не собран сборщиком мусора.',
+            feedbackNote: 'Замыкание удерживает переменные только тогда, когда сама функция достижима.',
+            code: ''
+          },
+          {
+            id: 's1-12',
+            number: 12,
+            category: 'Garbage Collector',
+            question: 'Как работает поколенческий сборщик мусора и какие приёмы помогают уменьшить связанные с его работой задержки в интерактивном React-приложении?',
+            ttsQuestion: 'Срез первый, вопрос 12. Как работает поколенческий сборщик мусора и как снизить связанные с ним задержки в Реакт-приложении?',
+            answerHtml: `
+              <p><strong>Поколенческий GC</strong> делит кучу на <strong>молодое</strong> и <strong>старое</strong> поколения: большинство объектов живут недолго, поэтому молодое поколение очищается часто и быстро, а пережившие несколько циклов объекты переносятся в старое поколение.</p>
+              <p>Чтобы снизить задержки в React, нужно <strong>сокращать лишние аллокации</strong> объектов/массивов при частых обновлениях, <strong>очищать подписки, таймеры и слушатели</strong> (чтобы не удерживать живые ссылки) и не накапливать огромные ненужные структуры в памяти. Сам по себе <code>requestAnimationFrame</code> или сокращение циклов паузы GC не устраняет.</p>
+            `,
+            ttsAnswer: 'Поколенческий сборщик мусора разделяет объекты на молодое и старое поколения, так как большинство объектов быстро становятся ненужными. Чтобы уменьшить задержки в Реакте, нужно меньше создавать лишние объекты при частых обновлениях, вовремя очищать эффекты и ссылки и не удерживать лишние данные в памяти. Сам по себе requestAnimationFrame паузы сборщика мусора не уменьшает.',
+            feedbackNote: 'Главное — уменьшать лишние выделения памяти и удержание ссылок; requestAnimationFrame сам по себе не лечит паузы GC.',
+            code: ''
+          }
+        ]
+      },
+      {
+        id: 'srez-2',
+        title: 'Срез №2',
+        questions: [
+          {
+            id: 's2-1',
+            number: 1,
+            category: 'Backend / HTTP',
+            question: 'Что такое HTTP-статус-код ответа и о чём сообщают группы 2xx, 4xx, 5xx?',
+            ttsQuestion: 'Срез второй, вопрос 1. Что такое эйч-ти-ти-пи статус-код ответа и о чём сообщают группы два икс икс, четыре икс икс и пять икс икс?',
+            answerHtml: `
+              <p><strong>HTTP-статус-код</strong> — трёхзначный код в ответе сервера, показывающий результат обработки запроса.</p>
+              <ul class="list-disc pl-5 space-y-1">
+                <li><strong>2xx:</strong> успех (<code>200 OK</code>, <code>201 Created</code>, <code>204 No Content</code>).</li>
+                <li><strong>4xx:</strong> ошибка клиента (<code>400 Bad Request</code>, <code>401 Unauthorized</code>, <code>403 Forbidden</code>, <code>404 Not Found</code>).</li>
+                <li><strong>5xx:</strong> ошибка сервера (<code>500</code>, <code>502</code>, <code>503</code>).</li>
+              </ul>
+              <p class="opacity-80">Также существуют <strong>1xx</strong> (информационные) и <strong>3xx</strong> (редиректы, например 301, 302, 304).</p>
+            `,
+            ttsAnswer: 'HTTP статус-код — трёхзначный код в ответе сервера о результате запроса. Группа два икс икс — успех (200, 201, 204), четыре икс икс — ошибка клиента (400, 401, 403, 404), пять икс икс — ошибка сервера (500, 502, 503). Также есть 1xx и 3xx.',
+            feedbackNote: 'Упоминайте 1xx и 3xx и конкретные коды 2xx, 4xx, 5xx.',
+            code: ''
+          },
+          {
+            id: 's2-2',
+            number: 2,
+            category: 'Backend / HTTP',
+            question: 'Что такое CORS, почему браузер может заблокировать запрос к API другого домена и какую роль в этом играют заголовки ответа сервера?',
+            ttsQuestion: 'Срез второй, вопрос 2. Что такое КОРС, почему браузер блокирует доступ к ответу другого домена и какую роль играют заголовки сервера?',
+            answerHtml: `
+              <p><strong>CORS</strong> — механизм безопасности браузера при запросах к другому <strong>origin</strong> (<em>протокол + домен + порт</em>). Браузер <strong>не блокирует все междоменные запросы вслепую</strong>: он запрещает JavaScript прочитать ответ, если сервер не разрешил это заголовками.</p>
+              <ul class="list-disc pl-5 space-y-1">
+                <li>Заголовки: <code>Access-Control-Allow-Origin</code>, <code>-Methods</code>, <code>-Headers</code>, <code>-Credentials</code>.</li>
+                <li>«Непростые» запросы (PUT/DELETE, <code>Content-Type: application/json</code>, кастомные заголовки) предваряются <strong>preflight (OPTIONS)</strong>.</li>
+                <li>При <code>credentials: 'include'</code> нужен <code>Access-Control-Allow-Credentials: true</code>, а <code>*</code> в <code>Allow-Origin</code> недопустим.</li>
+              </ul>
+            `,
+            ttsAnswer: 'КОРС — политика безопасности браузера при обращении к другому источнику. Браузер не блокирует все междоменные запросы подряд, а закрывает доступ ДжаваСкрипта к ответу без разрешающих заголовков сервера, таких как Access-Control-Allow-Origin. Сложные запросы сначала делают OPTIONS preflight.',
+            feedbackNote: 'Браузер не блокирует все междоменные запросы подряд; доступ JS регулируется CORS и заголовками сервера.',
+            code: ''
+          },
+          {
+            id: 's2-3',
+            number: 3,
+            category: 'Backend / HTTP',
+            question: 'В React-приложении пользователь быстро переключает страницы, а запросы к API ещё выполняются. Как с помощью AbortController предотвратить обработку устаревших ответов и в какой момент следует отменить запрос?',
+            ttsQuestion: 'Срез второй, вопрос 3. Как с помощью Аборт Контроллер в Реакте предотвратить устаревшие ответы и когда вызывать abort?',
+            answerHtml: `
+              <p>В <code>useEffect</code> создаём <code>new AbortController()</code>, передаём <code>signal: controller.signal</code> в <code>fetch</code>, а в функции очистки вызываем <code>controller.abort()</code>.</p>
+              <p>Очистка выполняется <strong>перед повторным запуском эффекта</strong> (при смене зависимостей) и <strong>при размонтировании компонента</strong>. В <code>catch</code> игнорируем <code>err.name === 'AbortError'</code>.</p>
+            `,
+            ttsAnswer: 'Создаём AbortController в юз Эффект, передаём сигнал в фетч и вызываем аборт в функции очистки — перед новым запуском эффекта при смене зависимостей и при размонтировании компонента.',
+            feedbackNote: 'Передавайте signal в fetch и вызывайте abort() при очистке эффекта.',
+            code: `useEffect(() => {
+  const controller = new AbortController();
+  fetch(\`/api/items?page=\${page}\`, { signal: controller.signal })
+    .then(r => r.json())
+    .then(setData)
+    .catch(e => { if (e.name !== 'AbortError') setError(e); });
+  return () => controller.abort();
+}, [page]);`
+          },
+          {
+            id: 's2-4',
+            number: 4,
+            category: 'Backend / HTTP',
+            question: 'Что такое тело HTTP-запроса и чем передача данных в теле отличается от передачи через параметры URL? В каких случаях данные обычно передают в теле?',
+            ttsQuestion: 'Срез второй, вопрос 4. Что такое тело запроса, чем оно отличается от параметров УРЛ и когда данные передают в теле?',
+            answerHtml: `
+              <p><strong>Тело запроса</strong> — полезная нагрузка, передаваемая отдельно от URL и заголовков (в <code>POST</code>, <code>PUT</code>, <code>PATCH</code>; у <code>GET</code> тела обычно нет).</p>
+              <p><strong>Параметры URL</strong> идут после <code>?</code> (поиск, фильтры, пагинация), видны в истории/логах и ограничены по длине. <strong>В теле</strong> передают создание/обновление данных, большие объёмы, файлы и чувствительные данные (пароли, токены).</p>
+            `,
+            ttsAnswer: 'Тело запроса передаётся отдельно от УРЛ и заголовков. Параметры УРЛ подходят для фильтров, поиска и пагинации, а в теле отправляют создание и изменение данных, файлы, большие объёмы и чувствительные поля.',
+            feedbackNote: 'Query-параметры находятся в URL, а тело передаётся отдельно.',
+            code: ''
+          },
+          {
+            id: 's2-5',
+            number: 5,
+            category: 'Backend / HTTP',
+            question: 'Как при отправке запроса выбрать между JSON и FormData, и какую роль играет заголовок Content-Type? Почему при использовании FormData не стоит вручную указывать multipart/form-data?',
+            ttsQuestion: 'Срез второй, вопрос 5. Как выбрать между Джейсон и Форм-Дата, роль Контент-Тайп и почему не задают мультипарт вручную для Форм-Дата?',
+            answerHtml: `
+              <p><code>Content-Type</code> задаёт формат тела запроса. <strong>JSON</strong> (<code>JSON.stringify</code> + <code>application/json</code>) используют для объектов и структур данных, <strong>FormData</strong> — для файлов и форм.</p>
+              <p>Для <code>FormData</code> заголовок вручную не задают: браузер сам ставит <code>multipart/form-data; boundary=...</code>, где <strong>boundary разделяет части формы (поля и файлы)</strong>. Ручной заголовок без сгенерированного <code>boundary</code> не позволит серверу разобрать части формы.</p>
+            `,
+            ttsAnswer: 'Контент-Тайп задаёт тип содержимого тела. Джейсон используют для структурированных данных, а Форм-Дата — для файлов и форм. Для Форм-Дата нельзя задавать мультипарт вручную, так как браузер сам подставляет разделитель баундари между частями формы.',
+            feedbackNote: 'Boundary разделяет части формы, а не чанки; для FormData Content-Type задаёт браузер.',
+            code: `const fd = new FormData();
+fd.append('avatar', file);
+fetch('/api/upload', { method: 'POST', body: fd });`
+          },
+          {
+            id: 's2-6',
+            number: 6,
+            category: 'Backend / HTTP',
+            question: 'Почему перед чтением ответа как JSON нужно учитывать статус HTTP и тип содержимого? Как устно описать обработку успешного ответа, ошибки сервера (с JSON-описанием) и ответа без тела?',
+            ttsQuestion: 'Срез второй, вопрос 6. Зачем проверять статус и тип содержимого перед чтением Джейсона и как описать успех, ошибку с Джейсоном и пустой ответ?',
+            answerHtml: `
+              <p><code>fetch</code> не отклоняется на 4xx/5xx, а пустой ответ (<code>204</code>) или не-JSON (например, HTML) вызовут ошибку при разборе JSON. Проверяем пустой ответ (<code>204</code>), <code>Content-Type</code> и <code>response.ok</code> (не <code>status.ok</code>).</p>
+              <p>При ошибке читаем JSON-описание ошибки (если тип JSON) и бросаем <code>Error</code>; при <code>204</code> возвращаем <code>null</code>; при успехе читаем <code>await res.json()</code>.</p>
+            `,
+            ttsAnswer: 'Фетч не падает на статусах ошибок, а пустой ответ или Эйч-Ти-Эм-Эль сломают разбор Джейсона. Сначала проверяем 204 и Контент-Тайп, смотрим response.ok, при ошибке читаем описание и бросаем ошибку, а при успехе вызываем response.json().',
+            feedbackNote: 'Используйте response.ok (не status.ok), проверяйте Content-Type и пустой ответ (204).',
+            code: `const res = await fetch(url);
+if (res.status === 204) return null;
+const isJson = (res.headers.get('content-type') || '').includes('application/json');
+if (!res.ok) {
+  const payload = isJson ? await res.json().catch(() => null) : null;
+  throw new Error(payload?.message || \`HTTP \${res.status}\`);
+}
+return isJson ? await res.json() : null;`
+          },
+          {
+            id: 's2-7',
+            number: 7,
+            category: 'JS Core',
+            question: 'Что такое класс в JavaScript, что происходит при создании экземпляра класса и какую роль при этом играет constructor?',
+            ttsQuestion: 'Срез второй, вопрос 7. Что такое класс в ДжаваСкрипт, что происходит при создании экземпляра и какова роль конструктора?',
+            answerHtml: `
+              <p>Класс — синтаксический сахар над прототипным наследованием. При <code>new Class()</code> оператор <code>new</code> создаёт объект, связывает его <code>[[Prototype]]</code> с <code>Class.prototype</code> (именно <code>new</code>, а не <code>constructor</code>), вызывает <code>constructor</code> с <code>this</code> = новый объект и возвращает его.</p>
+              <p><code>constructor</code> инициализирует поля экземпляра и необязателен: без него используется конструктор по умолчанию (в подклассе при наличии <code>constructor</code> нужен вызов <code>super()</code> до <code>this</code>).</p>
+            `,
+            ttsAnswer: 'Класс — надстройка над прототипами. Оператор нью создаёт объект, связывает его прототип с прототипом класса, вызывает конструктор с привязанным зис и возвращает экземпляр. Конструктор необязателен и нужен для инициализации полей.',
+            feedbackNote: 'Конструктор необязателен; прототип связывает оператор new.',
+            code: ''
+          },
+          {
+            id: 's2-8',
+            number: 8,
+            category: 'JS Core',
+            question: 'Как происходит переопределение метода в дочернем классе JavaScript и как из него обратиться к реализации родительского класса?',
+            ttsQuestion: 'Срез второй, вопрос 8. Как переопределяется метод в дочернем классе и как обратиться к методу родителя?',
+            answerHtml: `
+              <p>Дочерний класс объявляет метод с тем же именем, и по цепочке прототипов он находится раньше родительского. Обратиться к родительскому методу можно через <code>super.methodName()</code>.</p>
+            `,
+            ttsAnswer: 'Метод переопределяется объявлением метода с тем же именем в подклассе, а вызвать реализацию родителя можно через super точка имя метода.',
+            feedbackNote: 'Используйте super.methodName().',
+            code: `class A { greet() { return 'Hi'; } }
+class B extends A { greet() { return super.greet() + '!'; } }`
+          },
+          {
+            id: 's2-9',
+            number: 9,
+            category: 'JS Core',
+            question: 'Может ли подкласс в JavaScript напрямую обращаться к приватному полю родительского класса? Почему и как организовать доступ через методы родителя?',
+            ttsQuestion: 'Срез второй, вопрос 9. Может ли подкласс напрямую обращаться к приватному полю родителя, почему и как сделать доступ через методы?',
+            answerHtml: `
+              <p>Нет — прямое обращение к <code>#field</code> вне класса, где оно объявлено (включая подкласс), вызывает <code>SyntaxError</code>, так как приватные поля лексически привязаны к конкретному классу. Доступ организуем через методы или геттеры родительского класса.</p>
+            `,
+            ttsAnswer: 'Нет, подкласс не может напрямую обратиться к приватному полю родителя через решётку — это вызовет синтаксическую ошибку. Доступ организуют через методы или геттеры родителя.',
+            feedbackNote: 'Приватное поле #field доступно только внутри класса объявления.',
+            code: `class Base { #id = 1; getId() { return this.#id; } }
+class Derived extends Base { printId() { return this.getId(); } }`
+          },
+          {
+            id: 's2-10',
+            number: 10,
+            category: 'JS Core',
+            question: 'Поддерживают ли классы JavaScript множественное наследование? Как можно использовать примеси для похожего поведения и какие ограничения у такого подхода?',
+            ttsQuestion: 'Срез второй, вопрос 10. Есть ли множественное наследование в классах, как работают примеси и какие у них ограничения?',
+            answerHtml: `
+              <p>Нет, у класса один <code>extends</code>. Примеси добавляют методы/поведение через функции-фабрики классов (<code>const Mixin = Base =&gt; class extends Base {}</code>) или копирование методов в прототип.</p>
+              <p>Ограничения: конфликты имён методов, отсутствие доступа к приватным полям (<code>#</code>) другого класса/примеси, более сложная отладка.</p>
+            `,
+            ttsAnswer: 'Множественного наследования в классах нет. Примеси добавляют поведение через функции-фабрики или копирование в прототип, но имеют ограничения: конфликты имён методов и отсутствие доступа к приватным полям с решёткой.',
+            feedbackNote: 'Опишите добавление поведения примесью и ограничения (конфликты имён, нет доступа к #private).',
+            code: ''
+          },
+          {
+            id: 's2-11',
+            number: 11,
+            category: 'JS Core',
+            question: 'Чем отличаются методы массива map и forEach по возвращаемому значению и типичному применению?',
+            ttsQuestion: 'Срез второй, вопрос 11. Чем отличаются методы массива мэп и фор-ич по возвращаемому значению и применению?',
+            answerHtml: `
+              <p><code>map</code> возвращает <strong>новый массив</strong> с результатами колбэка и служит для <strong>трансформации элементов</strong>. <code>forEach</code> возвращает <strong><code>undefined</code></strong> и служит для <strong>побочных эффектов</strong>.</p>
+            `,
+            ttsAnswer: 'мэп возвращает новый массив для трансформации данных, а фор-ич возвращает андефайнд для побочных эффектов.',
+            feedbackNote: 'map возвращает новый массив, forEach — undefined.',
+            code: ''
+          },
+          {
+            id: 's2-12',
+            number: 12,
+            category: 'JS Core',
+            question: 'Чем поверхностное клонирование объекта отличается от глубокого и почему копирование объекта оператором spread не изолирует вложенные объекты?',
+            ttsQuestion: 'Срез второй, вопрос 12. Поверхностное и глубокое клонирование и почему спред не изолирует вложенные объекты?',
+            answerHtml: `
+              <p>Поверхностное копирование (<code>{ ...obj }</code>) копирует свойства первого уровня, а вложенные объекты — <strong>по ссылке</strong>, поэтому изменение <code>copy.nested.x</code> затронет оригинал. Глубокое клонирование (<code>structuredClone(obj)</code>) создаёт независимые вложенные объекты.</p>
+            `,
+            ttsAnswer: 'Поверхностное копирование через спред копирует верхний уровень, а вложенные объекты передаёт по ссылке. Глубокое клонирование через structuredClone создаёт независимые копии вложенных структур.',
+            feedbackNote: 'Вложенные объекты при spread копируются по ссылке.',
+            code: ''
+          },
+          {
+            id: 's2-13',
+            number: 13,
+            category: 'JS Core',
+            question: 'Как с помощью reduce мысленно организовать группировку массива объектов по значению выбранного свойства? Чем служит аккумулятор, как он меняется на каждой итерации и почему важна мутация аккумулятора? Объясните без написания кода.',
+            ttsQuestion: 'Срез второй, вопрос 13. Как с помощью редьюс сгруппировать массив объектов по свойству, чем служит аккумулятор и почему важна его мутация? Без кода.',
+            answerHtml: `
+              <p>Аккумулятор — это <strong>объект</strong>, где ключи — значения выбранного свойства, а значения — массивы подходящих объектов (не один общий массив). На каждой итерации берём значение свойства элемента, создаём массив по ключу при его отсутствии, добавляем элемент и возвращаем аккумулятор.</p>
+              <p>Аккумулятор меняется по одной и той же ссылке на каждом шаге: если начальный объект пришёл из внешней переменной, это вызовет побочный эффект снаружи, поэтому начальный объект лучше создавать прямо внутри <code>reduce</code>.</p>
+            `,
+            ttsAnswer: 'Аккумулятор — объект с массивами для каждого значения свойства. На каждом шаге мы добавляем элемент в массив нужного ключа. Поскольку аккумулятор мутируется по одной ссылке, начальный объект лучше создавать прямо внутри редьюс.',
+            feedbackNote: 'Аккумулятор — объект с массивами по ключам; учитывайте мутацию аккумулятора.',
+            code: ''
+          },
+          {
+            id: 's2-14',
+            number: 14,
+            category: 'Browser: DOM',
+            question: 'Что такое DOM и чем узел-элемент отличается от текстового узла?',
+            ttsQuestion: 'Срез второй, вопрос 14. Что такое ДОМ и чем узел-элемент отличается от текстового узла?',
+            answerHtml: `
+              <p><strong>DOM</strong> — объектное дерево HTML-документа. <strong>Узел-элемент</strong> — это тег с атрибутами и возможными потомками; <strong>текстовый узел</strong> — только текст, без атрибутов и детей, всегда лист дерева.</p>
+            `,
+            ttsAnswer: 'ДОМ — дерево узлов документа. Узел-элемент — это тег с атрибутами и потомками, а текстовый узел — только текст без атрибутов и дочерних узлов.',
+            feedbackNote: 'Узел-элемент vs текстовый узел.',
+            code: ''
+          },
+          {
+            id: 's2-15',
+            number: 15,
+            category: 'Browser: DOM',
+            question: 'Как устроено DOM-дерево и чем поиск элемента по CSS-селектору отличается от поиска по идентификатору?',
+            ttsQuestion: 'Срез второй, вопрос 15. Как устроено ДОМ-дерево и чем поиск по ЦСС-селектору отличается от поиска по идентификатору?',
+            answerHtml: `
+              <p>Корень DOM — <code>document</code> (не <code>window</code>), далее <code>&lt;html&gt;</code>, <code>&lt;head&gt;</code>, <code>&lt;body&gt;</code>; связи между узлами — родитель, потомок, сосед. <code>getElementById</code> ищет только по <code>id</code> (обычно быстрее), а <code>querySelector</code> принимает любой CSS-селектор и работает на любом элементе.</p>
+            `,
+            ttsAnswer: 'Корень ДОМ — документ, а связи между узлами — родитель, потомок и сосед. getElementById ищет по айди, а querySelector — по любому ЦСС-селектору.',
+            feedbackNote: 'Корень — document; связи — родитель/потомок/сосед.',
+            code: ''
+          },
+          {
+            id: 's2-16',
+            number: 16,
+            category: 'Browser: DOM',
+            question: 'Как частые изменения DOM влияют на производительность, как в DevTools выявить лишние перерасчёты стилей и компоновки и как Shadow DOM влияет на инспектирование элементов?',
+            ttsQuestion: 'Срез второй, вопрос 16. Как частые изменения ДОМ влияют на производительность, как найти перерасчёты в ДевТулз и как Шэдоу ДОМ влияет на инспектирование?',
+            answerHtml: `
+              <p>Частые изменения DOM вызывают повторные <code>Recalculate Style</code>, <code>Layout</code> и <code>Paint</code>. В <strong>Performance</strong> видны <code>Recalculate Style</code>, <code>Layout</code> и <code>Forced reflow</code>, а в <strong>Rendering</strong> — <code>Paint flashing</code>.</p>
+              <p><strong>Shadow DOM</strong> — инкапсуляция разметки и стилей компонента (не Virtual DOM React). В DevTools виден как <code>#shadow-root</code>; внешние селекторы и <code>document.querySelector</code> не находят узлы внутри него.</p>
+            `,
+            ttsAnswer: 'Частые изменения ДОМ вызывают перерасчёты стилей и компоновки. В ДевТулз в Перформанс видны Layout и Recalculate Style, а в Рендеринг — подсветка перерисовок. Шэдоу ДОМ виден как шэдоу-рут и скрывает внутренние элементы от внешних селекторов.',
+            feedbackNote: 'Используйте Performance / Rendering; не путайте Shadow DOM с Virtual DOM React.',
+            code: ''
+          },
+          {
+            id: 's2-17',
+            number: 17,
+            category: 'Browser: DOM',
+            question: 'Что такое DOM и как найти элемент страницы по его ID в JavaScript?',
+            ttsQuestion: 'Срез второй, вопрос 17. Что такое ДОМ и как найти элемент по айди в ДжаваСкрипт?',
+            answerHtml: `
+              <p>DOM — объектное представление HTML-документа. Найти элемент по ID можно через <code>document.getElementById('app')</code> или <code>document.querySelector('#app')</code>.</p>
+            `,
+            ttsAnswer: 'ДОМ — объектная модель документа. Элемент по айди ищется через getElementById или querySelector с решёткой.',
+            feedbackNote: 'При отсутствии элемента возвращается null.',
+            code: `const app = document.getElementById('app');`
+          },
+          {
+            id: 's2-18',
+            number: 18,
+            category: 'Browser: DOM',
+            question: 'Чем отличается getElementById и querySelector при поиске элемента: какие аргументы принимают, что возвращают при отсутствии элемента и когда удобнее каждый?',
+            ttsQuestion: 'Срез второй, вопрос 18. Чем отличаются getElementById и querySelector: аргументы, возврат при отсутствии и когда удобнее каждый?',
+            answerHtml: `
+              <p><code>getElementById(id)</code> принимает строку ID без <code>#</code> и возвращает элемент или <code>null</code> (не <code>undefined</code>); уникальность ID требует HTML, но метод её не гарантирует. <code>querySelector(selector)</code> принимает любой CSS-селектор и возвращает первый подходящий элемент в порядке документа или <code>null</code>.</p>
+              <p>Первый удобен по ID, второй — для сложных селекторов и поиска внутри поддерева.</p>
+            `,
+            ttsAnswer: 'getElementById принимает строку айди без решётки и возвращает элемент или налл. querySelector принимает любой ЦСС-селектор и возвращает первый подходящий элемент в порядке документа или налл.',
+            feedbackNote: 'При отсутствии элемента возвращается null.',
+            code: ''
+          },
+          {
+            id: 's2-19',
+            number: 19,
+            category: 'Browser: DOM',
+            question: 'Чем отличаются результаты querySelectorAll и getElementsByClassName при добавлении новых элементов на страницу и как это влияет на обработку найденных элементов?',
+            ttsQuestion: 'Срез второй, вопрос 19. Чем отличаются querySelectorAll и getElementsByClassName при добавлении новых элементов и как это влияет на обработку?',
+            answerHtml: `
+              <p><code>querySelectorAll</code> возвращает статический <code>NodeList</code> (не меняется при изменении DOM), а <code>getElementsByClassName</code> — живую <code>HTMLCollection</code> (автоматически включает новый элемент с нужным классом).</p>
+              <p>При обходе живой коллекции с изменением DOM элементы могут пропускаться, поэтому её удобно копировать через <code>Array.from()</code>.</p>
+            `,
+            ttsAnswer: 'querySelectorAll возвращает статический NodeList, а getElementsByClassName — живую HTMLCollection, которая обновляется при добавлении элемента с нужным классом.',
+            feedbackNote: 'NodeList — статический, HTMLCollection — живая.',
+            code: ''
+          },
+          {
+            id: 's2-20',
+            number: 20,
+            category: 'Browser: Events',
+            question: 'Что такое DOM-событие и какие два примера событий, возникающих при действиях пользователя, вы можете назвать?',
+            ttsQuestion: 'Срез второй, вопрос 20. Что такое ДОМ-событие и назовите два примера пользовательских событий?',
+            answerHtml: `
+              <p><strong>DOM-событие</strong> — сигнал о действии пользователя или браузера, на который подписываются через <code>addEventListener</code>. Примеры действий пользователя: <code>click</code> и <code>input</code>.</p>
+            `,
+            ttsAnswer: 'ДОМ-событие — сигнал о произошедшем событии. Примеры действий пользователя: клик и инпут.',
+            feedbackNote: 'Приведите два конкретных события пользователя (например, click и input).',
+            code: ''
+          },
+          {
+            id: 's2-21',
+            number: 21,
+            category: 'Browser: Events',
+            question: 'Что делает preventDefault() при обработке события? Чем предотвращение стандартного поведения отличается от остановки распространения события?',
+            ttsQuestion: 'Срез второй, вопрос 21. Что делает preventDefault и чем отмена стандартного действия отличается от остановки распространения?',
+            answerHtml: `
+              <p><code>preventDefault()</code> отменяет стандартное действие браузера (переход по ссылке, отправку формы), но <strong>не останавливает распространение события</strong>. Распространение останавливает <code>stopPropagation()</code>, не отменяя стандартное действие.</p>
+            `,
+            ttsAnswer: 'preventDefault отменяет стандартное действие браузера, но не останавливает распространение события; распространение останавливает stopPropagation.',
+            feedbackNote: 'preventDefault() отменяет стандартное поведение, stopPropagation() — распространение.',
+            code: ''
+          },
+          {
+            id: 's2-22',
+            number: 22,
+            category: 'Browser: Events',
+            question: 'Как работают фазы перехвата и всплытия DOM-события, как это позволяет обрабатывать клики по множеству дочерних элементов одним обработчиком на родителе и какую роль играет event.target?',
+            ttsQuestion: 'Срез второй, вопрос 22. Фазы перехвата и всплытия, делегирование на родителе и роль event.target.',
+            answerHtml: `
+              <p>Сначала идёт фаза <strong>перехвата (capturing)</strong> сверху вниз к цели, затем фаза цели (<code>target</code>) и затем <strong>всплытие (bubbling)</strong> снизу вверх.</p>
+              <p>Всплытие позволяет повесить один обработчик на родителя (делегирование), а <code>event.target</code> указывает на исходный элемент, где произошло событие.</p>
+            `,
+            ttsAnswer: 'Сначала идёт фаза перехвата сверху вниз, затем цель и всплытие снизу вверх. Всплытие позволяет обрабатывать клики на родителе, а event.target показывает элемент, по которому кликнули.',
+            feedbackNote: 'Сначала перехват, затем всплытие.',
+            code: ''
+          },
+          {
+            id: 's2-23',
+            number: 23,
+            category: 'Browser Storage',
+            question: 'Что такое cookie и чем оно отличается от Local Storage при отправке HTTP-запросов?',
+            ttsQuestion: 'Срез второй, вопрос 23. Что такое куки и чем оно отличается от Локал Сторадж при отправке эйч-ти-ти-пи запросов?',
+            answerHtml: `
+              <p><strong>Cookie</strong> хранятся на клиенте и <strong>автоматически отправляются браузером</strong> с подходящими HTTP-запросами. Данные из <code>localStorage</code> автоматически в HTTP-запросы не отправляются.</p>
+            `,
+            ttsAnswer: 'Куки хранятся в браузере и автоматически отправляются с подходящими эйч-ти-ти-пи запросами, а Локал Сторадж сам по себе не отправляется.',
+            feedbackNote: 'Cookie хранятся на клиенте и отправляются автоматически с подходящими HTTP-запросами.',
+            code: ''
+          },
+          {
+            id: 's2-24',
+            number: 24,
+            category: 'Browser Storage',
+            question: 'Как устно объяснить установку и удаление cookie через JS, какую роль играют Max-Age, Expires, Path и Domain?',
+            ttsQuestion: 'Срез второй, вопрос 24. Установка и удаление куки через ДжаваСкрипт и роль Max-Age, Expires, Path и Domain.',
+            answerHtml: `
+              <p><code>Expires</code> задаёт дату истечения, <code>Max-Age</code> — срок в секундах (приоритетнее <code>Expires</code>), <code>Path</code> — путь URL, <code>Domain</code> — домен.</p>
+              <p>Через JS куку задают/обновляют в <code>document.cookie</code>, а удаляют перезаписью с тем же именем, <code>Path</code> и <code>Domain</code> и <code>Max-Age=0</code> (или датой в прошлом).</p>
+            `,
+            ttsAnswer: 'Expires задаёт дату истечения, Max-Age — срок в секундах, Path — путь, Domain — домен. Удалить куку через ДжаваСкрипт можно, задав то же имя, путь и домен с Max-Age равным нулю.',
+            feedbackNote: 'Упомяните Expires, Max-Age, Path, Domain и удаление через JS.',
+            code: `document.cookie = 'token=; Max-Age=0; path=/';`
+          },
+          {
+            id: 's2-25',
+            number: 25,
+            category: 'Browser Storage',
+            question: 'Какие риски возникают при хранении токена/сессии в cookie, как работают HttpOnly, Secure и SameSite и почему JS не может установить HttpOnly?',
+            ttsQuestion: 'Срез второй, вопрос 25. Риски токена в куки, флаги HttpOnly, Secure, SameSite и почему ДжаваСкрипт не может задать HttpOnly.',
+            answerHtml: `
+              <p>Риски: <strong>XSS</strong>, <strong>CSRF</strong> и перехват по HTTP. <code>HttpOnly</code> скрывает cookie от JS (защита от XSS), <code>Secure</code> разрешает передачу только по HTTPS, <code>SameSite</code> ограничивает межсайтовую отправку (снижая риск CSRF).</p>
+              <p>JS не может установить <code>HttpOnly</code> — флаг задаёт только сервер в заголовке <code>Set-Cookie</code>.</p>
+            `,
+            ttsAnswer: 'Основные риски — Экс-Эс-Эс и Си-Эс-Ар-Эф. HttpOnly запрещает доступ из ДжаваСкрипта, Secure требует Эйч-Ти-Ти-Пи-Эс, SameSite снижает риск Си-Эс-Ар-Эф. Установить HttpOnly из ДжаваСкрипта нельзя — его задаёт сервер.',
+            feedbackNote: 'SameSite снижает риск CSRF; HttpOnly задаёт сервер.',
+            code: ''
+          },
+          {
+            id: 's2-26',
+            number: 26,
+            category: 'Browser Storage',
+            question: 'Для cookie сессии пользователя какие меры защиты вы бы выбрали против XSS и CSRF, как работают флаги HttpOnly, Secure и SameSite и почему JavaScript не может установить HttpOnly?',
+            ttsQuestion: 'Срез второй, вопрос 26. Меры защиты сессионной куки против Экс-Эс-Эс и Си-Эс-Ар-Эф и работа флагов.',
+            answerHtml: `
+              <p>Для сессионной cookie применяем <code>HttpOnly</code> + <code>Secure</code> + <code>SameSite=Lax</code> (или <code>Strict</code>), защищаем UI от XSS (санитизация, отсутствие небезопасной вставки HTML) и используем CSRF-защиту при необходимости. <code>HttpOnly</code> устанавливается сервером, а не скриптом.</p>
+            `,
+            ttsAnswer: 'Для защиты сессионной куки используем флаги HttpOnly, Secure и SameSite, защиту от Экс-Эс-Эс в интерфейсе и меры против Си-Эс-Ар-Эф. Флаг HttpOnly выставляет сервер.',
+            feedbackNote: 'Сочетание HttpOnly, Secure и SameSite плюс защита от XSS/CSRF.',
+            code: ''
+          },
+          {
+            id: 's2-27',
+            number: 27,
+            category: 'Browser Storage',
+            question: 'Чем отличаются localStorage и sessionStorage по времени хранения данных и области доступа между вкладками?',
+            ttsQuestion: 'Срез второй, вопрос 27. Чем отличаются localStorage и sessionStorage по сроку хранения и доступу между вкладками?',
+            answerHtml: `
+              <p><code>localStorage</code> хранит данные бессрочно и общий для всех вкладок одного <code>origin</code>. <code>sessionStorage</code> хранит данные в пределах одной вкладки: сохраняется при перезагрузке, но удаляется при закрытии вкладки и не разделяется между вкладками.</p>
+            `,
+            ttsAnswer: 'localStorage хранит данные бессрочно и общий для вкладок одного источника, а sessionStorage живёт до закрытия вкладки и не доступен другим вкладкам.',
+            feedbackNote: 'sessionStorage сохраняется при перезагрузке, но не разделяется между вкладками.',
+            code: ''
+          },
+          {
+            id: 's2-28',
+            number: 28,
+            category: 'Browser Storage',
+            question: 'Как сохранить объект в localStorage и восстановить его при следующем открытии страницы? Какие ошибки могут возникнуть и как их обработать?',
+            ttsQuestion: 'Срез второй, вопрос 28. Как сохранить и восстановить объект в localStorage, какие бывают ошибки и как их обработать?',
+            answerHtml: `
+              <p>Хранилище работает со строками: записываем через <code>localStorage.setItem(key, JSON.stringify(obj))</code>, читаем через <code>localStorage.getItem(key)</code> и парсим через <code>JSON.parse</code>.</p>
+              <p>Оборачиваем в <code>try/catch</code> из-за превышения квоты, запрета доступа к хранилищу и <code>SyntaxError</code> при битом JSON.</p>
+            `,
+            ttsAnswer: 'Сохраняем объект через setItem и JSON.stringify, а восстанавливаем через getItem и JSON.parse, оборачивая операции в try/catch на случай ошибок квоты, доступа или некорректного JSON.',
+            feedbackNote: 'Используйте setItem / getItem и обрабатывайте ошибки записи, доступа и JSON.parse.',
+            code: `try {
+  localStorage.setItem('profile', JSON.stringify({ theme: 'dark' }));
+  const raw = localStorage.getItem('profile');
+  const parsed = raw ? JSON.parse(raw) : null;
+} catch (e) {
+  console.error(e);
+}`
+          },
+          {
+            id: 's2-29',
+            number: 29,
+            category: 'Browser Storage',
+            question: 'Как организовать синхронизацию состояния React-приложения между вкладками через localStorage? Роль события storage, ограничения и обновление в той же вкладке?',
+            ttsQuestion: 'Срез второй, вопрос 29. Синхронизация состояния Реакта между вкладками через localStorage, событие storage и обновление в той же вкладке.',
+            answerHtml: `
+              <p>Подписываемся на <code>window.addEventListener('storage', ...)</code>. Событие <code>storage</code> приходит в <strong>другие вкладки</strong> того же <code>origin</code>, но <strong>не в саму вкладку</strong>, где вызван <code>setItem</code> — в ней обновляем состояние React напрямую.</p>
+            `,
+            ttsAnswer: 'Событие storage приходит в другие вкладки того же источника, но не в ту вкладку, где произошло изменение; в ней состояние Реакта обновляют напрямую.',
+            feedbackNote: 'Событие storage не срабатывает в изменившей данные вкладке.',
+            code: ''
+          },
+          {
+            id: 's2-30',
+            number: 30,
+            category: 'HTML & Rendering',
+            question: 'Из каких основных частей состоит HTML-документ и для чего нужны head и body?',
+            ttsQuestion: 'Срез второй, вопрос 30. Из каких основных частей состоит Эйч-Ти-Эм-Эль документ и зачем нужны head и body?',
+            answerHtml: `
+              <p>HTML-документ включает <code>&lt;!DOCTYPE html&gt;</code>, корневой <code>&lt;html&gt;</code>, <code>&lt;head&gt;</code> (метаданные, <code>title</code>, стили, скрипты) и <code>&lt;body&gt;</code> (видимый контент страницы).</p>
+            `,
+            ttsAnswer: 'Документ состоит из корневого html с секциями head для метаданных и стилей и body для видимого содержимого страницы.',
+            feedbackNote: 'Различайте head и body.',
+            code: ''
+          },
+          {
+            id: 's2-31',
+            number: 31,
+            category: 'HTML & Rendering',
+            question: 'Для чего нужны семантические элементы HTML (header, main, footer) и чем они полезнее универсальных div?',
+            ttsQuestion: 'Срез второй, вопрос 31. Зачем нужны семантические элементы Эйч-Ти-Эм-Эль и чем они полезнее div?',
+            answerHtml: `
+              <p>Семантические теги задают смысл контента, улучшают доступность (скринридеры и ориентиры навигации) и читаемость разметки; <code>div</code> нейтрален, а количество тегов автоматически не повышает ранжирование.</p>
+            `,
+            ttsAnswer: 'Семантические элементы улучшают доступность для скринридеров и читаемость кода, в отличие от нейтрального div.',
+            feedbackNote: 'Важны доступность и структура, а не «количество тегов для SEO».',
+            code: ''
+          },
+          {
+            id: 's2-32',
+            number: 32,
+            category: 'HTML & Rendering',
+            question: 'Чем обычно отличаются блочные и строчные элементы в HTML, почему нельзя определять семантику по внешнему виду и как работает Critical Rendering Path (HTML, CSS, JS)?',
+            ttsQuestion: 'Срез второй, вопрос 32. Блочные и строчные элементы, семантика vs display и этапы критического пути рендеринга.',
+            answerHtml: `
+              <p><strong>Блочные</strong> начинаются с новой строки и занимают доступную ширину; <strong>строчные</strong> идут в потоке строки по размеру содержимого. <code>display</code> меняет отображение, но не семантику тега.</p>
+              <p><strong>Critical Rendering Path:</strong> DOM + CSSOM → Render Tree → Layout → Paint. CSS блокирует рендеринг, а обычный <code>&lt;script&gt;</code> приостанавливает парсинг HTML.</p>
+            `,
+            ttsAnswer: 'Блочные элементы начинаются с новой строки, строчные идут в строке, а семантика зависит от тега, а не от display. Критический путь включает DOM, CSSOM, Render Tree, Layout и Paint; CSS блокирует рендеринг, а обычный скрипт приостанавливает разбор HTML.',
+            feedbackNote: 'Этапы: DOM, CSSOM, Render Tree, Layout, Paint; CSS блокирует рендеринг, обычный скрипт — парсинг HTML.',
+            code: ''
+          },
+          {
+            id: 's2-33',
+            number: 33,
+            category: 'CSS',
+            question: 'Чем отличаются селекторы по тегу, классу и идентификатору в CSS? Какой из них имеет больший вес?',
+            ttsQuestion: 'Срез второй, вопрос 33. Чем отличаются селекторы по тегу, классу и идентификатору и какой имеет больший вес?',
+            answerHtml: `
+              <p>Селектор по тегу выбирает все элементы этого тега, класс — элементы с нужным классом, ID — элемент по идентификатору. По весу: <strong>ID &gt; класс &gt; тег</strong>.</p>
+            `,
+            ttsAnswer: 'Селектор идентификатора тяжелее класса, а класс тяжелее селектора по тегу.',
+            feedbackNote: 'ID > класс > тег.',
+            code: ''
+          },
+          {
+            id: 's2-34',
+            number: 34,
+            category: 'CSS',
+            question: 'Если к одному элементу применяются противоречащие правила по тегу, классу и идентификатору, какое победит и почему? Что при равной специфичности?',
+            ttsQuestion: 'Срез второй, вопрос 34. Какое правило победит при конфликте тега, класса и ID и что при равной специфичности?',
+            answerHtml: `
+              <p>Победит правило с большей специфичностью — по <strong>ID</strong>. При равной специфичности побеждает правило, объявленное позже в каскаде. <code>!important</code> — пометка объявления, а не селектор, и она не безусловна.</p>
+            `,
+            ttsAnswer: 'Победит правило по идентификатору. При одинаковой специфичности побеждает правило, написанное позже. !important — пометка объявления, а не селектор.',
+            feedbackNote: '!important — пометка объявления, не селектор.',
+            code: ''
+          },
+          {
+            id: 's2-35',
+            number: 35,
+            category: 'CSS',
+            question: 'Родительскому элементу задан цвет текста через селектор идентификатора, а дочернему — другой цвет через селектор тега. Какой цвет будет у дочернего элемента и почему?',
+            ttsQuestion: 'Срез второй, вопрос 35. Какой цвет будет у дочернего элемента, если у родителя цвет задан через ID, а у ребёнка — через тег?',
+            answerHtml: `
+              <p>У дочернего элемента будет цвет, заданный <strong>селектором тега</strong>. Наследуются только определённые свойства, а прямое правило на самом элементе всегда приоритетнее унаследованного значения от родителя независимо от специфичности правила родителя.</p>
+            `,
+            ttsAnswer: 'У дочернего элемента будет цвет по селектору тега, так как прямое правило на элементе всегда сильнее унаследованного значения.',
+            feedbackNote: 'Прямое правило на дочернем элементе сильнее унаследованного цвета родителя.',
+            code: `#parent { color: red; }
+p { color: blue; }`
+          }
+        ]
+      }
+    ];
+
+    // ==================== Состояние приложения ====================
+    const state = {
+      slices: [],
+      currentSliceId: 'srez-2',
+      currentIndex: 0,
+      order: [],
+      topicFilter: 'all',
+      statusFilter: 'all',
+      searchQuery: '',
+      isShuffled: false,
+      learnedIds: [],
+      hardIds: [],
+      isAnswerBlurred: false,
+      answerFontSize: 15,
+      systemVoices: [],
+      piperEnabled: false,
+      isPlaying: false,
+      isPaused: false,
+      phase: 'idle',
+      pauseRemaining: 0,
+      pauseTotal: 0,
+      timerInterval: null
+    };
+
+    const synth = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
+
+    function cloneInitialSlices() {
+      return JSON.parse(JSON.stringify(INITIAL_SLICES));
+    }
+
+    function loadPersistedSlices() {
+      const saved = safeStorageGetJson('js_trainer_slices_v2', null);
+      if (Array.isArray(saved) && saved.length > 0 && saved.every(s => Array.isArray(s.questions))) {
+        return saved;
+      }
+      return cloneInitialSlices();
+    }
+
+    function persistSlices() {
+      safeStorageSet('js_trainer_slices_v2', JSON.stringify(state.slices));
+    }
+
+    function getCurrentSlice() {
+      return state.slices.find(s => s.id === state.currentSliceId) || state.slices[0];
+    }
+
+    function getSliceQuestions() {
+      const slice = getCurrentSlice();
+      return slice ? slice.questions : [];
+    }
+
+    // ==================== Инициализация ====================
+    function initApp() {
+      state.slices = loadPersistedSlices();
+      state.learnedIds = safeStorageGetJson('js_trainer_learned_v2', []);
+      state.hardIds = safeStorageGetJson('js_trainer_hard_v2', []);
+
+      const savedSlice = safeStorageGet('js_trainer_active_slice_v2', 'srez-2');
+      state.currentSliceId = state.slices.some(s => s.id === savedSlice) ? savedSlice : state.slices[0].id;
+
+      const savedFont = parseInt(safeStorageGet('js_trainer_font_size_v2', '15'), 10);
+      if (!Number.isNaN(savedFont)) {
+        state.answerFontSize = Math.min(24, Math.max(13, savedFont));
+      }
+
+      restoreSettings();
+      applyAnswerFontSize();
+      populateSliceSelectors();
+      populateTopicControls();
+      rebuildOrder();
+      renderSidebar();
+      renderCurrentCard();
+      updateProgressUI();
+      setupKeyboardShortcuts();
+
+      try {
+        if (!synth) {
+          showAlert('Встроенная озвучка (Web Speech API) недоступна в текущем WebView. Вы можете пользоваться карточками, фильтрами, таймерами и тестами.');
+        } else {
+          loadSystemVoices();
+          if (typeof synth.addEventListener === 'function') {
+            synth.addEventListener('voiceschanged', loadSystemVoices);
+          } else {
+            synth.onvoiceschanged = loadSystemVoices;
+          }
+        }
+      } catch (err) {
+        console.warn('Speech init warning:', err);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+
+    // ==================== Срезы и темы ====================
+    function populateSliceSelectors() {
+      const selects = [document.getElementById('headerSliceSelect'), document.getElementById('sidebarSliceSelect')];
+      selects.forEach(sel => {
+        if (!sel) return;
+        sel.innerHTML = '';
+        state.slices.forEach(slice => {
+          const opt = document.createElement('option');
+          opt.value = slice.id;
+          opt.textContent = `${slice.title} (${slice.questions.length})`;
+          sel.appendChild(opt);
+        });
+        sel.value = state.currentSliceId;
+      });
+
+      const currentSlice = getCurrentSlice();
+      if (currentSlice) {
+        document.getElementById('sidebarTitle').textContent = `${currentSlice.title} · Аудио-студия`;
+      }
+    }
+
+    function handleSliceChange(sliceId) {
+      if (!sliceId || !state.slices.some(s => s.id === sliceId)) return;
+      stopAudio();
+      state.currentSliceId = sliceId;
+      safeStorageSet('js_trainer_active_slice_v2', sliceId);
+      state.topicFilter = 'all';
+      populateSliceSelectors();
+      populateTopicControls();
+      rebuildOrder();
+      renderSidebar();
+      renderCurrentCard();
+      updateProgressUI();
+    }
+
+    function populateTopicControls() {
+      const questions = getSliceQuestions();
+      const topics = Array.from(new Set(questions.map(q => q.category).filter(Boolean)));
+      const activeTopic = topics.includes(state.topicFilter) ? state.topicFilter : 'all';
+      state.topicFilter = activeTopic;
+
+      const selects = [document.getElementById('topicFilter'), document.getElementById('quickTopicSelect')];
+      selects.forEach(sel => {
+        if (!sel) return;
+        sel.innerHTML = '';
+        const allOpt = document.createElement('option');
+        allOpt.value = 'all';
+        allOpt.textContent = `Все темы (${questions.length})`;
+        sel.appendChild(allOpt);
+
+        topics.forEach(topic => {
+          const count = questions.filter(q => q.category === topic).length;
+          const opt = document.createElement('option');
+          opt.value = topic;
+          opt.textContent = `${topic} (${count})`;
+          sel.appendChild(opt);
+        });
+        sel.value = activeTopic;
+      });
+
+      const pillsWrap = document.getElementById('topicPillsContainer');
+      if (pillsWrap) {
+        pillsWrap.innerHTML = '';
+        const allPill = createTopicPill('all', `Все темы (${questions.length})`, activeTopic === 'all');
+        pillsWrap.appendChild(allPill);
+        topics.forEach(topic => {
+          const count = questions.filter(q => q.category === topic).length;
+          pillsWrap.appendChild(createTopicPill(topic, `${topic} · ${count}`, activeTopic === topic));
+        });
+      }
+    }
+
+    function createTopicPill(value, label, isActive) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.onclick = () => selectTopicFilter(value);
+      btn.className = isActive
+        ? 'px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-600 text-white whitespace-nowrap shrink-0 transition'
+        : 'px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 whitespace-nowrap shrink-0 transition';
+      return btn;
+    }
+
+    function selectTopicFilter(topicValue) {
+      state.topicFilter = topicValue;
+      const tf = document.getElementById('topicFilter');
+      const qt = document.getElementById('quickTopicSelect');
+      if (tf) tf.value = topicValue;
+      if (qt) qt.value = topicValue;
+      populateTopicControls();
+      applyFilters();
+    }
+
+    function syncTopicFromSidebar(val) {
+      state.topicFilter = val;
+      const qt = document.getElementById('quickTopicSelect');
+      if (qt) qt.value = val;
+      populateTopicControls();
+      applyFilters();
+    }
+
+    function syncTopicFromQuick(val) {
+      state.topicFilter = val;
+      const tf = document.getElementById('topicFilter');
+      if (tf) tf.value = val;
+      populateTopicControls();
+      applyFilters();
+    }
+
+    // ==================== Голоса, Piper и настройки ====================
+    function loadSystemVoices() {
+      if (!synth) return;
+      try {
+        const all = synth.getVoices() || [];
+        const ru = all.filter(v => (v.lang || '').toLowerCase().includes('ru'));
+        const other = all.filter(v => !(v.lang || '').toLowerCase().includes('ru'));
+        state.systemVoices = [...ru, ...other];
+        populateVoiceSelect();
+      } catch (e) {
+        console.warn('getVoices warning:', e);
+      }
+    }
+
+    function populateVoiceSelect() {
+      const select = document.getElementById('voiceSelect');
+      if (!select) return;
+      const savedURI = safeStorageGet('js_trainer_voice_v2');
+      select.innerHTML = '';
+
+      if (!state.systemVoices.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Голос по умолчанию (ru-RU)';
+        select.appendChild(opt);
+        return;
+      }
+
+      state.systemVoices.forEach(voice => {
+        const opt = document.createElement('option');
+        opt.value = voice.voiceURI;
+        const isRu = (voice.lang || '').toLowerCase().includes('ru');
+        opt.textContent = `${isRu ? '🇷🇺 ' : ''}${voice.name} (${voice.lang})`;
+        select.appendChild(opt);
+      });
+
+      if (savedURI && state.systemVoices.some(v => v.voiceURI === savedURI)) {
+        select.value = savedURI;
+      } else {
+        const ru = state.systemVoices.filter(v => (v.lang || '').toLowerCase().includes('ru'));
+        if (ru.length > 0) select.value = ru[0].voiceURI;
+      }
+    }
+
+    function handleVoiceChange() {
+      safeStorageSet('js_trainer_voice_v2', document.getElementById('voiceSelect').value);
+    }
+
+    function togglePiperMode(enabled) {
+      state.piperEnabled = Boolean(enabled);
+      safeStorageSet('js_trainer_piper_v2', String(state.piperEnabled));
+      const badge = document.getElementById('ttsEngineBadge');
+      const statusEl = document.getElementById('piperStatusText');
+      if (state.piperEnabled) {
+        badge.textContent = 'Piper TTS (fallback Web Speech)';
+        statusEl.textContent = 'Локальный движок Piper не предзагружен: используется Web Speech API как резерв.';
+      } else {
+        badge.textContent = 'Web Speech API';
+        statusEl.textContent = 'Активен системный Web Speech API (офлайн/браузер)';
+      }
+    }
+
+    function saveSettings() {
+      safeStorageSet('js_trainer_rate_v2', document.getElementById('rateRange').value);
+      safeStorageSet('js_trainer_think_pause_v2', document.getElementById('thinkPauseSelect').value);
+      safeStorageSet('js_trainer_auto_next_v2', document.getElementById('autoNextSelect').value);
+    }
+
+    function restoreSettings() {
+      const rate = safeStorageGet('js_trainer_rate_v2');
+      if (rate) document.getElementById('rateRange').value = rate;
+      updateRateLabel();
+
+      const think = safeStorageGet('js_trainer_think_pause_v2');
+      if (think) document.getElementById('thinkPauseSelect').value = think;
+
+      const autoNext = safeStorageGet('js_trainer_auto_next_v2');
+      if (autoNext) document.getElementById('autoNextSelect').value = autoNext;
+
+      const piper = safeStorageGet('js_trainer_piper_v2') === 'true';
+      document.getElementById('piperModeToggle').checked = piper;
+      togglePiperMode(piper);
+    }
+
+    function updateRateLabel() {
+      const val = parseFloat(document.getElementById('rateRange').value || '1.05').toFixed(2);
+      document.getElementById('rateValue').textContent = `${val}x`;
+    }
+
+    function handleRateInput() {
+      updateRateLabel();
+    }
+
+    // ==================== Размер шрифта ответа ====================
+    function changeAnswerFontSize(delta) {
+      setAnswerFontSize(Math.min(24, Math.max(13, state.answerFontSize + delta)));
+    }
+
+    function toggleLargeAnswerFont() {
+      setAnswerFontSize(state.answerFontSize >= 20 ? 15 : 20);
+    }
+
+    function setAnswerFontSize(px) {
+      state.answerFontSize = px;
+      safeStorageSet('js_trainer_font_size_v2', String(px));
+      applyAnswerFontSize();
+    }
+
+    function applyAnswerFontSize() {
+      const body = document.getElementById('answerBody');
+      const indicator = document.getElementById('fontSizeIndicator');
+      if (body) {
+        body.style.fontSize = `${state.answerFontSize}px`;
+        body.style.lineHeight = state.answerFontSize >= 19 ? '1.5' : '1.62';
+      }
+      if (indicator) {
+        indicator.textContent = `${state.answerFontSize}px`;
+      }
+    }
+
+    // ==================== Фильтрация и порядок ====================
+    function getFilteredIndices() {
+      const questions = getSliceQuestions();
+      const query = state.searchQuery.trim().toLowerCase();
+      return questions
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item }) => {
+          if (state.topicFilter !== 'all' && item.category !== state.topicFilter) return false;
+          if (state.statusFilter === 'hard' && !state.hardIds.includes(item.id)) return false;
+          if (state.statusFilter === 'unlearned' && state.learnedIds.includes(item.id)) return false;
+          if (query) {
+            const hay = `${item.number} ${item.category} ${item.question} ${item.ttsAnswer} ${item.feedbackNote}`.toLowerCase();
+            if (!hay.includes(query)) return false;
+          }
+          return true;
+        })
+        .map(({ idx }) => idx);
+    }
+
+    function rebuildOrder(keepQuestionId = null) {
+      const questions = getSliceQuestions();
+      let indices = getFilteredIndices();
+      if (!indices.length) {
+        indices = questions.map((_, idx) => idx);
+      }
+      if (state.isShuffled) {
+        for (let i = indices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+      }
+      state.order = indices;
+      if (keepQuestionId) {
+        const pos = state.order.findIndex(idx => questions[idx] && questions[idx].id === keepQuestionId);
+        state.currentIndex = pos >= 0 ? pos : 0;
+      } else {
+        state.currentIndex = 0;
+      }
+    }
+
+    function applyFilters() {
+      stopAudio();
+      state.searchQuery = document.getElementById('searchInput').value;
+      document.getElementById('clearSearchBtn').classList.toggle('hidden', !state.searchQuery);
+      rebuildOrder();
+      renderSidebar();
+      renderCurrentCard();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      applyFilters();
+    }
+
+    function setStatusFilter(status) {
+      stopAudio();
+      state.statusFilter = status;
+      const map = { all: 'filterAllBtn', hard: 'filterHardBtn', unlearned: 'filterUnlearnedBtn' };
+      Object.entries(map).forEach(([key, id]) => {
+        const btn = document.getElementById(id);
+        btn.className = status === key
+          ? 'flex-1 py-1.5 px-2 text-xs font-medium rounded-lg bg-indigo-600 text-white transition'
+          : 'flex-1 py-1.5 px-2 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+      });
+      rebuildOrder();
+      renderSidebar();
+      renderCurrentCard();
+    }
+
+    function toggleShuffle() {
+      stopAudio();
+      const currentQ = getCurrentQuestion();
+      state.isShuffled = !state.isShuffled;
+      const btn = document.getElementById('shuffleBtn');
+      if (state.isShuffled) {
+        btn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600');
+        btn.classList.remove('text-slate-300');
+      } else {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-600');
+        btn.classList.add('text-slate-300');
+      }
+      rebuildOrder(currentQ ? currentQ.id : null);
+      renderSidebar();
+      renderCurrentCard();
+    }
+
+    function getCurrentQuestion() {
+      const questions = getSliceQuestions();
+      const dataIdx = state.order[state.currentIndex];
+      return questions[dataIdx] || questions[0] || null;
+    }
+
+    // ==================== Рендер карточки и списка ====================
+    function renderSidebar() {
+      const listEl = document.getElementById('questionList');
+      const questions = getSliceQuestions();
+      listEl.innerHTML = '';
+
+      state.order.forEach((dataIdx, orderPos) => {
+        const item = questions[dataIdx];
+        if (!item) return;
+        const isActive = orderPos === state.currentIndex;
+        const isLearned = state.learnedIds.includes(item.id);
+        const isHard = state.hardIds.includes(item.id);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => {
+          stopAudio();
+          state.currentIndex = orderPos;
+          renderSidebar();
+          renderCurrentCard();
+          toggleSidebar(false);
+        };
+        btn.className = `w-full text-left p-2.5 rounded-xl transition flex items-start gap-2.5 border ${
+          isActive
+            ? 'bg-indigo-600/15 border-indigo-500/40 text-white'
+            : 'border-transparent hover:bg-slate-800/70 text-slate-300'
+        }`;
+
+        btn.innerHTML = `
+          <span class="mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-lg text-[11px] font-bold shrink-0 ${
+            isLearned
+              ? 'bg-emerald-500/20 text-emerald-400'
+              : isActive
+              ? 'bg-indigo-600 text-white'
+              : 'bg-slate-800 text-slate-400'
+          }">${isLearned ? '✓' : item.number}</span>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-[10px] font-medium text-slate-500 truncate">${item.category}</span>
+              ${isHard ? '<span class="text-amber-400 text-xs leading-none">★</span>' : ''}
+            </div>
+            <p class="text-xs font-medium line-clamp-2 leading-snug mt-0.5">${item.question}</p>
+          </div>
+        `;
+        listEl.appendChild(btn);
+      });
+    }
+
+    function renderCurrentCard() {
+      const item = getCurrentQuestion();
+      if (!item) return;
+
+      document.getElementById('headerCounter').textContent = `Вопрос ${state.currentIndex + 1} / ${state.order.length}`;
+      document.getElementById('headerTopic').textContent = item.category;
+      document.getElementById('cardNumberBadge').textContent = `#${item.number}`;
+      document.getElementById('cardCategoryBadge').textContent = item.category;
+      document.getElementById('questionText').textContent = item.question;
+      document.getElementById('answerBody').innerHTML = item.answerHtml;
+
+      const feedbackBox = document.getElementById('feedbackBox');
+      if (item.feedbackNote && item.feedbackNote.trim()) {
+        feedbackBox.classList.remove('hidden');
+        document.getElementById('feedbackText').textContent = item.feedbackNote;
+      } else {
+        feedbackBox.classList.add('hidden');
+      }
+
+      const codeBox = document.getElementById('codeBox');
+      if (item.code && item.code.trim()) {
+        codeBox.classList.remove('hidden');
+        document.getElementById('codeContent').textContent = item.code;
+      } else {
+        codeBox.classList.add('hidden');
+      }
+
+      const isHard = state.hardIds.includes(item.id);
+      const hardBtn = document.getElementById('markHardBtn');
+      document.getElementById('markHardIcon').textContent = isHard ? '★' : '☆';
+      hardBtn.className = isHard
+        ? 'px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition'
+        : 'px-3 py-1.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 hover:bg-slate-800 transition';
+
+      const isLearned = state.learnedIds.includes(item.id);
+      const learnedBtn = document.getElementById('markLearnedBtn');
+      document.getElementById('markLearnedIcon').textContent = isLearned ? '✓' : '○';
+      learnedBtn.className = isLearned
+        ? 'px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition'
+        : 'px-3 py-1.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 hover:bg-slate-800 transition';
+
+      applyAnswerBlurState();
+    }
+
+    function updateProgressUI() {
+      const questions = getSliceQuestions();
+      const total = questions.length;
+      const count = questions.filter(q => state.learnedIds.includes(q.id)).length;
+      const pct = total ? Math.round((count / total) * 100) : 0;
+      document.getElementById('progressText').textContent = `Выучено в срезе: ${count} из ${total} (${pct}%)`;
+      document.getElementById('progressBar').style.width = `${pct}%`;
+    }
+
+    function toggleHardCurrent() {
+      const item = getCurrentQuestion();
+      if (!item) return;
+      const idx = state.hardIds.indexOf(item.id);
+      if (idx === -1) state.hardIds.push(item.id);
+      else state.hardIds.splice(idx, 1);
+      safeStorageSet('js_trainer_hard_v2', JSON.stringify(state.hardIds));
+      renderCurrentCard();
+      renderSidebar();
+    }
+
+    function toggleLearnedCurrent() {
+      const item = getCurrentQuestion();
+      if (!item) return;
+      const idx = state.learnedIds.indexOf(item.id);
+      if (idx === -1) state.learnedIds.push(item.id);
+      else state.learnedIds.splice(idx, 1);
+      safeStorageSet('js_trainer_learned_v2', JSON.stringify(state.learnedIds));
+      renderCurrentCard();
+      renderSidebar();
+      updateProgressUI();
+    }
+
+    function toggleBlurAnswer() {
+      state.isAnswerBlurred = !state.isAnswerBlurred;
+      applyAnswerBlurState();
+    }
+
+    function applyAnswerBlurState() {
+      const container = document.getElementById('answerContainer');
+      const btn = document.getElementById('toggleAnswerVisibilityBtn');
+      if (state.isAnswerBlurred) {
+        container.classList.add('blur-md', 'select-none', 'opacity-40');
+        btn.textContent = 'Показать ответ';
+      } else {
+        container.classList.remove('blur-md', 'select-none', 'opacity-40');
+        btn.textContent = 'Скрыть ответ';
+      }
+    }
+
+    // ==================== Аудио-цикл и таймеры ====================
+    function setPlayerUI(statusText, dotColorClass, isPlayingState) {
+      document.getElementById('playerStatusText').textContent = statusText;
+      document.getElementById('statusDot').className = `w-2.5 h-2.5 rounded-full shrink-0 ${dotColorClass}`;
+
+      const playIcon = document.getElementById('playIcon');
+      const pauseIcon = document.getElementById('pauseIcon');
+      const label = document.getElementById('playPauseLabel');
+
+      if (isPlayingState && !state.isPaused) {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        label.textContent = 'Пауза';
+      } else {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        label.textContent = state.isPaused ? 'Продолжить' : 'Слушать вопрос';
+      }
+    }
+
+    function clearTimers() {
+      if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+      }
+      document.getElementById('pauseTimerBox').classList.add('hidden');
+      document.getElementById('pauseTimerBox').classList.remove('flex');
+      document.getElementById('pauseProgressWrap').classList.add('hidden');
+    }
+
+    function stopAudio() {
+      clearTimers();
+      if (synth) {
+        try { synth.cancel(); } catch (e) {}
+      }
+      state.isPlaying = false;
+      state.isPaused = false;
+      state.phase = 'idle';
+      setPlayerUI('Готов к тренировке', 'bg-slate-400', false);
+    }
+
+    function togglePlayPause() {
+      if (state.phase === 'thinking_pause' && document.getElementById('thinkPauseSelect').value === 'manual') {
+        skipPauseToAnswer();
+        return;
+      }
+
+      if (!state.isPlaying) {
+        startQuestionCycle();
+        return;
+      }
+
+      if (state.isPaused) {
+        state.isPaused = false;
+        if (synth && (state.phase === 'speaking_question' || state.phase === 'speaking_answer')) {
+          try { synth.resume(); } catch (e) {}
+        }
+        setPlayerUI(
+          state.phase === 'speaking_question' ? 'Озвучиваю вопрос...' : 'Озвучиваю ответ...',
+          'bg-indigo-500 speaking-pulse',
+          true
+        );
+      } else {
+        state.isPaused = true;
+        if (synth && (state.phase === 'speaking_question' || state.phase === 'speaking_answer')) {
+          try { synth.pause(); } catch (e) {}
+        }
+        setPlayerUI('На паузе', 'bg-amber-500', false);
+      }
+    }
+
+    function speakText(text) {
+      return new Promise((resolve, reject) => {
+        if (!synth) {
+          reject(new Error('No speechSynthesis'));
+          return;
+        }
+        try {
+          synth.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'ru-RU';
+          utterance.rate = parseFloat(document.getElementById('rateRange').value) || 1.05;
+          const selectedURI = document.getElementById('voiceSelect').value;
+          const voice = state.systemVoices.find(v => v.voiceURI === selectedURI);
+          if (voice) utterance.voice = voice;
+
+          utterance.onend = () => resolve();
+          utterance.onerror = (e) => {
+            if (e && (e.error === 'interrupted' || e.error === 'canceled')) {
+              resolve();
+              return;
+            }
+            reject(e);
+          };
+          synth.speak(utterance);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    async function startQuestionCycle() {
+      stopAudio();
+      const item = getCurrentQuestion();
+      if (!item) return;
+
+      state.isPlaying = true;
+      state.isPaused = false;
+      state.phase = 'speaking_question';
+      setPlayerUI(`Читаю вопрос #${item.number}...`, 'bg-indigo-500 speaking-pulse', true);
+
+      try {
+        await speakText(item.ttsQuestion || item.question);
+        if (!state.isPlaying) return;
+        beginThinkingPause();
+      } catch (err) {
+        showAlert('Озвучка недоступна в текущем окружении — используйте таймер паузы и эталонный ответ на карточке.');
+        state.isPlaying = true;
+        beginThinkingPause();
+      }
+    }
+
+    function beginThinkingPause() {
+      const pauseSetting = document.getElementById('thinkPauseSelect').value;
+      if (pauseSetting === '0') {
+        speakAnswerPhase();
+        return;
+      }
+
+      state.phase = 'thinking_pause';
+      const timerBox = document.getElementById('pauseTimerBox');
+      const timerLabel = document.getElementById('pauseTimerLabel');
+      const progressWrap = document.getElementById('pauseProgressWrap');
+      const progressBar = document.getElementById('pauseProgressBar');
+
+      timerBox.classList.remove('hidden');
+      timerBox.classList.add('flex');
+
+      if (pauseSetting === 'manual') {
+        setPlayerUI('Ваш выход! Ответьте вслух и нажмите «Ответить сейчас»', 'bg-amber-500 speaking-pulse', true);
+        timerLabel.textContent = 'Ожидание вашего ответа (вручную)';
+        progressWrap.classList.add('hidden');
+        return;
+      }
+
+      const seconds = parseInt(pauseSetting, 10);
+      state.pauseTotal = seconds * 10;
+      state.pauseRemaining = state.pauseTotal;
+      progressWrap.classList.remove('hidden');
+      progressBar.style.width = '100%';
+      timerLabel.textContent = `Пауза на ваш ответ: ${seconds}с`;
+      setPlayerUI(`Ответьте вслух (${seconds} сек)...`, 'bg-amber-500 speaking-pulse', true);
+
+      state.timerInterval = setInterval(() => {
+        if (!state.isPlaying || state.isPaused) return;
+        state.pauseRemaining -= 1;
+        const secLeft = Math.ceil(state.pauseRemaining / 10);
+        const pct = Math.max(0, (state.pauseRemaining / state.pauseTotal) * 100);
+        timerLabel.textContent = `Пауза на ваш ответ: ${secLeft}с`;
+        progressBar.style.width = `${pct}%`;
+
+        if (state.pauseRemaining <= 0) {
+          clearTimers();
+          speakAnswerPhase();
+        }
+      }, 100);
+    }
+
+    function skipPauseToAnswer() {
+      clearTimers();
+      speakAnswerPhase();
+    }
+
+    async function speakAnswerPhase() {
+      const item = getCurrentQuestion();
+      if (!item) return;
+
+      if (synth) {
+        try { synth.cancel(); } catch (e) {}
+      }
+
+      state.isPlaying = true;
+      state.isPaused = false;
+      state.phase = 'speaking_answer';
+      setPlayerUI(`Озвучиваю ответ #${item.number}...`, 'bg-emerald-500 speaking-pulse', true);
+
+      try {
+        await speakText(item.ttsAnswer || stripHtmlToPlainText(item.answerHtml));
+        if (!state.isPlaying) return;
+        handleAfterAnswer();
+      } catch (err) {
+        handleAfterAnswer();
+      }
+    }
+
+    function handleAfterAnswer() {
+      const autoNext = document.getElementById('autoNextSelect').value;
+      if (autoNext === 'stop') {
+        stopAudio();
+        setPlayerUI('Вопрос завершён', 'bg-emerald-500', false);
+        return;
+      }
+
+      const delaySec = parseInt(autoNext, 10);
+      state.phase = 'next_pause';
+      state.pauseTotal = delaySec * 10;
+      state.pauseRemaining = state.pauseTotal;
+      const progressWrap = document.getElementById('pauseProgressWrap');
+      const progressBar = document.getElementById('pauseProgressBar');
+      progressWrap.classList.remove('hidden');
+      progressBar.style.width = '100%';
+      setPlayerUI(`Следующий вопрос через ${delaySec}с...`, 'bg-indigo-400', true);
+
+      state.timerInterval = setInterval(() => {
+        if (!state.isPlaying || state.isPaused) return;
+        state.pauseRemaining -= 1;
+        const pct = Math.max(0, (state.pauseRemaining / state.pauseTotal) * 100);
+        progressBar.style.width = `${pct}%`;
+
+        if (state.pauseRemaining <= 0) {
+          clearTimers();
+          if (state.currentIndex < state.order.length - 1) {
+            state.currentIndex += 1;
+            renderSidebar();
+            renderCurrentCard();
+            startQuestionCycle();
+          } else {
+            stopAudio();
+            setPlayerUI('Все вопросы списка пройдены!', 'bg-emerald-500', false);
+          }
+        }
+      }, 100);
+    }
+
+    function repeatQuestion() {
+      startQuestionCycle();
+    }
+
+    function playAnswerOnly() {
+      clearTimers();
+      speakAnswerPhase();
+    }
+
+    function prevQuestion() {
+      if (!state.order.length) return;
+      const wasPlaying = state.isPlaying;
+      stopAudio();
+      state.currentIndex = (state.currentIndex - 1 + state.order.length) % state.order.length;
+      renderSidebar();
+      renderCurrentCard();
+      if (wasPlaying) startQuestionCycle();
+    }
+
+    function nextQuestion() {
+      if (!state.order.length) return;
+      const wasPlaying = state.isPlaying;
+      stopAudio();
+      state.currentIndex = (state.currentIndex + 1) % state.order.length;
+      renderSidebar();
+      renderCurrentCard();
+      if (wasPlaying) startQuestionCycle();
+    }
+
+    // ==================== Динамическое добавление срезов и вопросов ====================
+    function openBuilderModal(tab = 'question') {
+      const modal = document.getElementById('builderModal');
+      const sliceSelect = document.getElementById('newQSliceSelect');
+      sliceSelect.innerHTML = '';
+      state.slices.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.title;
+        sliceSelect.appendChild(opt);
+      });
+      sliceSelect.value = state.currentSliceId;
+
+      const topics = Array.from(new Set(state.slices.flatMap(s => s.questions.map(q => q.category)).filter(Boolean)));
+      const datalist = document.getElementById('existingTopicsDatalist');
+      datalist.innerHTML = '';
+      topics.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        datalist.appendChild(opt);
+      });
+
+      switchBuilderTab(tab);
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeBuilderModal() {
+      const modal = document.getElementById('builderModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function switchBuilderTab(tab) {
+      const qBtn = document.getElementById('tabAddQuestionBtn');
+      const sBtn = document.getElementById('tabAddSliceBtn');
+      const qForm = document.getElementById('addQuestionForm');
+      const sForm = document.getElementById('addSliceForm');
+
+      if (tab === 'slice') {
+        sBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white transition';
+        qBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+        qForm.classList.add('hidden');
+        sForm.classList.remove('hidden');
+      } else {
+        qBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white transition';
+        sBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+        sForm.classList.add('hidden');
+        qForm.classList.remove('hidden');
+      }
+    }
+
+    function submitNewQuestion(e) {
+      e.preventDefault();
+      const sliceId = document.getElementById('newQSliceSelect').value;
+      const category = document.getElementById('newQTopicInput').value.trim();
+      const question = document.getElementById('newQTitleInput').value.trim();
+      const rawAnswer = document.getElementById('newQAnswerInput').value.trim();
+      const rawTts = document.getElementById('newQTtsInput').value.trim();
+      const feedbackNote = document.getElementById('newQFeedbackInput').value.trim();
+      const code = document.getElementById('newQCodeInput').value;
+
+      const targetSlice = state.slices.find(s => s.id === sliceId);
+      if (!targetSlice || !question || !rawAnswer) return;
+
+      const nextNumber = targetSlice.questions.length + 1;
+      const newQuestion = {
+        id: `${sliceId}-q-${Date.now()}`,
+        number: nextNumber,
+        category: category || 'Общая тема',
+        question,
+        ttsQuestion: `Вопрос ${nextNumber}. ${question}`,
+        answerHtml: normalizeAnswerHtml(rawAnswer),
+        ttsAnswer: rawTts || stripHtmlToPlainText(rawAnswer),
+        feedbackNote,
+        code
+      };
+
+      targetSlice.questions.push(newQuestion);
+      persistSlices();
+      document.getElementById('addQuestionForm').reset();
+      closeBuilderModal();
+
+      handleSliceChange(sliceId);
+      const idxInOrder = state.order.findIndex(idx => targetSlice.questions[idx] && targetSlice.questions[idx].id === newQuestion.id);
+      if (idxInOrder >= 0) {
+        state.currentIndex = idxInOrder;
+        renderSidebar();
+        renderCurrentCard();
+      }
+      showAlert(`Вопрос #${nextNumber} добавлен в «${targetSlice.title}».`);
+    }
+
+    function submitNewSlice(e) {
+      e.preventDefault();
+      const title = document.getElementById('newSliceNameInput').value.trim();
+      const category = document.getElementById('newSliceTopicInput').value.trim() || 'Новая тема';
+      const question = document.getElementById('newSliceQInput').value.trim();
+      const rawAnswer = document.getElementById('newSliceAInput').value.trim();
+
+      if (!title || !question || !rawAnswer) return;
+
+      const newSliceId = `slice-${Date.now()}`;
+      state.slices.push({
+        id: newSliceId,
+        title,
+        questions: [
+          {
+            id: `${newSliceId}-q-1`,
+            number: 1,
+            category,
+            question,
+            ttsQuestion: `Вопрос 1. ${question}`,
+            answerHtml: normalizeAnswerHtml(rawAnswer),
+            ttsAnswer: stripHtmlToPlainText(rawAnswer),
+            feedbackNote: '',
+            code: ''
+          }
+        ]
+      });
+
+      persistSlices();
+      document.getElementById('addSliceForm').reset();
+      closeBuilderModal();
+      handleSliceChange(newSliceId);
+      showAlert(`Создан новый срез «${title}».`);
+    }
+
+    // ==================== Экспорт / Импорт / Сброс ====================
+    function exportSlicesJson() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        slices: state.slices,
+        learnedIds: state.learnedIds,
+        hardIds: state.hardIds
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'js_interview_slices.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function importSlicesJson(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || ''));
+          if (parsed && Array.isArray(parsed.slices) && parsed.slices.length > 0) {
+            state.slices = parsed.slices;
+            if (Array.isArray(parsed.learnedIds)) {
+              state.learnedIds = parsed.learnedIds;
+              safeStorageSet('js_trainer_learned_v2', JSON.stringify(state.learnedIds));
+            }
+            if (Array.isArray(parsed.hardIds)) {
+              state.hardIds = parsed.hardIds;
+              safeStorageSet('js_trainer_hard_v2', JSON.stringify(state.hardIds));
+            }
+            persistSlices();
+            handleSliceChange(state.slices[0].id);
+            showAlert('Данные импортированы из JSON.');
+          } else {
+            showAlert('В файле JSON отсутствует массив slices.');
+          }
+        } catch (err) {
+          showAlert('Не удалось прочитать JSON-файл.');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function resetCustomData() {
+      stopAudio();
+      state.slices = cloneInitialSlices();
+      state.learnedIds = [];
+      state.hardIds = [];
+      safeStorageSet('js_trainer_slices_v2', JSON.stringify(state.slices));
+      safeStorageSet('js_trainer_learned_v2', '[]');
+      safeStorageSet('js_trainer_hard_v2', '[]');
+      handleSliceChange('srez-2');
+      showAlert('Данные сброшены к исходным Срезам №1 и №2.');
+    }
+
+    // ==================== Навигация, Drawer, Alerts и горячие клавиши ====================
+    function toggleSidebar(open) {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('mobileSidebarOverlay');
+      if (open) {
+        toggleMobileSettings(false);
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      }
+    }
+
+    function toggleMobileSettings(open) {
+      const drawer = document.getElementById('settingsDrawer');
+      const overlay = document.getElementById('mobileSettingsOverlay');
+      if (open) {
+        drawer.classList.remove('translate-y-full');
+        drawer.classList.add('translate-y-0');
+        overlay.classList.remove('hidden');
+      } else {
+        drawer.classList.add('translate-y-full');
+        drawer.classList.remove('translate-y-0');
+        overlay.classList.add('hidden');
+      }
+    }
+
+    function showAlert(message) {
+      document.getElementById('alertText').textContent = message;
+      document.getElementById('alertBox').classList.remove('hidden');
+    }
+
+    function hideAlert() {
+      document.getElementById('alertBox').classList.add('hidden');
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+
+    function copyCodeSnippet() {
+      const code = document.getElementById('codeContent').textContent;
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        const btn = document.getElementById('copyCodeBtn');
+        btn.textContent = 'Скопировано!';
+        setTimeout(() => { btn.textContent = 'Копировать'; }, 1500);
+      } catch (e) {
+        console.warn('Copy failed:', e);
+      }
+      document.body.removeChild(ta);
+    }
+
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          togglePlayPause();
+        } else if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          nextQuestion();
+        } else if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          prevQuestion();
+        } else if (e.code === 'KeyR') {
+          e.preventDefault();
+          repeatQuestion();
+        } else if (e.code === 'Enter') {
+          e.preventDefault();
+          if (state.phase === 'thinking_pause') skipPauseToAnswer();
+          else playAnswerOnly();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
