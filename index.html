@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JS Срез №1 и №2 — Аудио-тренажёр</title>
+  <title>Аудио-тренажёр</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -43,6 +43,34 @@
     .speaking-pulse {
       animation: pulseGlow 1.5s infinite ease-in-out;
     }
+    .player-icon-btn {
+      width: 42px; height: 42px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(71,85,105,.72); border-radius: 13px; background: rgba(30,41,59,.82);
+      color: #e2e8f0; transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .player-icon-btn svg { width: 19px; height: 19px; }
+    .player-icon-btn:hover { background: #334155; border-color: rgba(129,140,248,.55); }
+    .player-icon-btn:active { transform: scale(.96); }
+    .player-icon-btn.player-primary { width: 46px; background: #4f46e5; border-color: #6366f1; color: white; }
+    .player-icon-btn.player-primary:hover { background: #6366f1; }
+    .player-icon-btn.player-quiet { color: #c7d2fe; }
+    .player-icon-btn.player-answer { color: #a5b4fc; border-color: rgba(99,102,241,.45); background: rgba(49,46,129,.25); }
+    .player-icon-btn.player-settings { color: #cbd5e1; }
+    .floating-edit-btn {
+      width: 39px; height: 39px; display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 11px; color: #c7d2fe; background: rgba(51,65,85,.72);
+      transition: background .15s ease, color .15s ease, transform .15s ease;
+    }
+    .floating-edit-btn svg { width: 18px; height: 18px; }
+    .floating-edit-btn:hover { background: #4f46e5; color: white; }
+    .floating-edit-btn:active { transform: scale(.94); }
+    .floating-edit-muted { color: #94a3b8; }
+    @media (max-width: 420px) {
+      .player-icon-btn { width: 37px; height: 39px; border-radius: 11px; }
+      .player-icon-btn svg { width: 17px; height: 17px; }
+      .player-icon-btn.player-primary { width: 41px; }
+    }
+
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
@@ -179,43 +207,35 @@
           <button type="button" onclick="hideAlert()" class="text-amber-400 hover:text-amber-200 font-bold shrink-0">✕</button>
         </div>
 
-        <!-- Панель управления аудиоплеером -->
-        <section class="bg-slate-900 border-y sm:border border-slate-800 rounded-none sm:rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-3">
-
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <!-- Компактная панель управления -->
+        <section class="bg-slate-900/95 border-y sm:border border-slate-800 rounded-none sm:rounded-2xl px-3 py-2.5 sm:px-4 shadow-xs space-y-2">
+          <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1.5 sm:gap-2">
-              <button type="button" onclick="prevQuestion()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition shrink-0" title="Предыдущий вопрос (←)">
-                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+              <button type="button" onclick="prevQuestion()" class="player-icon-btn" title="Предыдущий вопрос (←)" aria-label="Предыдущий вопрос">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"/></svg>
               </button>
-
-              <button type="button" id="playPauseBtn" onclick="togglePlayPause()" class="flex-1 sm:flex-initial justify-center px-4 sm:px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition">
-                <svg id="playIcon" class="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <svg id="pauseIcon" class="w-4 h-4 sm:w-5 sm:h-5 hidden shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                <span id="playPauseLabel" class="truncate">Слушать вопрос</span>
+              <button type="button" id="playPauseBtn" onclick="togglePlayPause()" class="player-icon-btn player-primary" title="Старт / пауза (Space)" aria-label="Старт или пауза">
+                <svg id="playIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <svg id="pauseIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                <span id="playPauseLabel" class="sr-only">Слушать вопрос</span>
               </button>
-
-              <button type="button" onclick="stopAudio()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition shrink-0" title="Остановить">
-                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+              <button type="button" onclick="stopAudio()" class="player-icon-btn" title="Остановить" aria-label="Остановить">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
               </button>
-
-              <button type="button" onclick="nextQuestion()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition shrink-0" title="Следующий вопрос (→)">
-                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              <button type="button" onclick="nextQuestion()" class="player-icon-btn" title="Следующий вопрос (→)" aria-label="Следующий вопрос">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5l7 7-7 7"/></svg>
               </button>
-
-              <!-- Кнопка открытия Drawer настроек на мобильных (<=768px) -->
-              <button type="button" onclick="toggleMobileSettings(true)" class="md:hidden px-3 py-2.5 rounded-xl border border-indigo-500/40 bg-indigo-950/50 hover:bg-indigo-900/60 text-xs font-semibold text-indigo-200 flex items-center gap-1.5 shrink-0" aria-label="Голос и паузы">
-                <span>⚙️</span>
+              <span class="w-px h-7 bg-slate-700 mx-1"></span>
+              <button type="button" onclick="repeatQuestion()" class="player-icon-btn player-quiet" title="Повторить вопрос (R)" aria-label="Повторить вопрос">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 11a8.1 8.1 0 0 0-14.9-3L3 11m0-5v5h5M4 13a8.1 8.1 0 0 0 14.9 3L21 13m0 5v-5h-5"/></svg>
               </button>
-            </div>
-
-            <div class="grid grid-cols-2 sm:flex items-center gap-2">
-              <button type="button" onclick="repeatQuestion()" class="px-3 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-xs font-medium text-slate-200 transition text-center" title="Повторить вопрос (R)">
-                ↻ Повтор вопроса
-              </button>
-              <button type="button" onclick="playAnswerOnly()" class="px-3 py-2 rounded-xl border border-indigo-800/70 bg-indigo-950/50 hover:bg-indigo-900/60 text-xs font-medium text-indigo-300 transition text-center" title="Сразу озвучить ответ (Enter)">
-                🔊 Сразу ответ
+              <button type="button" onclick="playAnswerOnly()" class="player-icon-btn player-answer" title="Сразу озвучить ответ (Enter)" aria-label="Сразу озвучить ответ">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v18m4-14a6 6 0 0 1 0 10m-8-10a6 6 0 0 0 0 10m12-13a10 10 0 0 1 0 16M4 7a10 10 0 0 0 0 10"/></svg>
               </button>
             </div>
+            <button type="button" onclick="toggleMobileSettings(true)" class="player-icon-btn player-settings" title="Настройки озвучки" aria-label="Открыть настройки">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z"/></svg>
+            </button>
           </div>
 
           <!-- Статус плеера -->
@@ -238,10 +258,14 @@
           </div>
 
           <!-- Контейнер настроек: в карточке на >=768px, в выдвижном Drawer снизу на <=768px -->
-          <div id="settingsDrawer" class="fixed md:static bottom-0 left-0 right-0 z-50 md:z-auto translate-y-full md:translate-y-0 transition-transform duration-200 ease-out bg-slate-900 md:bg-transparent rounded-t-2xl md:rounded-none border-t border-slate-800 p-4 md:p-0 md:pt-3 shadow-2xl md:shadow-none">
-            <div class="flex items-center justify-between mb-3 md:hidden">
-              <span class="text-sm font-bold text-white">⚙️ Голос и паузы</span>
-              <button type="button" onclick="toggleMobileSettings(false)" class="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold">Готово</button>
+          <div id="settingsDrawer" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/75 backdrop-blur-sm p-3 sm:p-5" onclick="if(event.target===this) toggleMobileSettings(false)">
+            <div class="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 sm:p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-5">
+              <div>
+                <h2 class="text-base sm:text-lg font-semibold text-white">Настройки озвучки</h2>
+                <p class="text-xs text-slate-400 mt-1">Голос, скорость, паузы и режим воспроизведения</p>
+              </div>
+              <button type="button" onclick="toggleMobileSettings(false)" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-lg" aria-label="Закрыть настройки">×</button>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -296,8 +320,26 @@
               </label>
               <span id="piperStatusText" class="text-[11px] text-slate-400">Активен системный Web Speech API (офлайн/браузер)</span>
             </div>
+            </div>
           </div>
         </section>
+
+        <!-- Плавающие действия с текущим вопросом -->
+        <div class="fixed right-3 sm:right-6 bottom-5 sm:bottom-7 z-30 flex flex-col gap-1.5 rounded-2xl border border-slate-700/90 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md">
+          <button type="button" onclick="openQuestionEditor(getCurrentQuestion()?.id)" class="floating-edit-btn" title="Редактировать текущий вопрос" aria-label="Редактировать текущий вопрос">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="m14 5 5 5M4 20l4.2-.8L19 8.4a2.1 2.1 0 0 0-3-3L5.2 16.2 4 20Z"/></svg>
+          </button>
+          <button type="button" onclick="openQuestionEditor(null, getCurrentQuestion()?.id)" class="floating-edit-btn" title="Добавить вопрос после текущего" aria-label="Добавить вопрос после текущего">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-width="2" d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <span class="h-px bg-slate-700 mx-1"></span>
+          <button type="button" onclick="moveCurrentQuestion(-1)" class="floating-edit-btn floating-edit-muted" title="Переместить вопрос выше" aria-label="Переместить вопрос выше">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 15 7-7 7 7"/></svg>
+          </button>
+          <button type="button" onclick="moveCurrentQuestion(1)" class="floating-edit-btn floating-edit-muted" title="Переместить вопрос ниже" aria-label="Переместить вопрос ниже">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 9 7 7 7-7"/></svg>
+          </button>
+        </div>
 
         <!-- Карточка текущего вопроса и ответа -->
         <article class="bg-slate-900 border-y sm:border border-slate-800 rounded-none sm:rounded-2xl p-4 sm:p-7 shadow-xs space-y-5 sm:space-y-6">
@@ -2075,6 +2117,107 @@ p { color: blue; }`
       if (wasPlaying) startQuestionCycle();
     }
 
+    // ==================== Редактирование и порядок вопросов ====================
+    let questionEditorContext = null;
+
+    function renumberQuestions(slice) {
+      slice.questions.forEach((q, index) => {
+        q.number = index + 1;
+        if (!q.ttsQuestion || /^Вопрос \d+\./.test(q.ttsQuestion)) q.ttsQuestion = `Вопрос ${q.number}. ${q.question}`;
+      });
+    }
+
+    function refreshQuestionViews(sliceId, questionId) {
+      persistSlices();
+      populateSliceSelectors();
+      populateTopicControls();
+      if (state.currentSliceId !== sliceId) handleSliceChange(sliceId);
+      else {
+        rebuildOrder(questionId || null);
+        renderSidebar();
+        renderCurrentCard();
+        updateProgressUI();
+      }
+    }
+
+    function openQuestionEditor(questionId = null, insertAfterId = null) {
+      const slice = state.slices.find(s => s.id === state.currentSliceId);
+      if (!slice) return;
+      const question = questionId ? slice.questions.find(q => q.id === questionId) : null;
+      if (questionId && !question) return;
+      questionEditorContext = { sliceId: slice.id, questionId, insertAfterId };
+      const isInsert = !question;
+      document.getElementById('questionEditorTitle').textContent = isInsert ? 'Добавить вопрос' : 'Редактировать вопрос';
+      document.getElementById('questionEditorHint').textContent = isInsert
+        ? (insertAfterId ? 'Новый вопрос будет добавлен сразу после выбранного' : 'Новый вопрос будет добавлен в конец текущего среза')
+        : `Вопрос №${question.number}. Изменения сохраняются на этом устройстве`;
+      document.getElementById('editQCategory').value = question?.category || '';
+      document.getElementById('editQTtsQuestion').value = question?.ttsQuestion || '';
+      document.getElementById('editQQuestion').value = question?.question || '';
+      document.getElementById('editQAnswer').innerHTML = question?.answerHtml || '<p></p>';
+      document.getElementById('editQTtsAnswer').value = question?.ttsAnswer || '';
+      document.getElementById('editQFeedback').value = question?.feedbackNote || '';
+      document.getElementById('editQCode').value = question?.code || '';
+      const modal = document.getElementById('questionEditorModal');
+      modal.classList.remove('hidden'); modal.classList.add('flex');
+      setTimeout(() => document.getElementById('editQQuestion').focus(), 0);
+    }
+
+    function closeQuestionEditor() {
+      const modal = document.getElementById('questionEditorModal');
+      modal.classList.add('hidden'); modal.classList.remove('flex');
+      questionEditorContext = null;
+    }
+
+    function saveQuestionEditor(event) {
+      event.preventDefault();
+      if (!questionEditorContext) return;
+      const { sliceId, questionId, insertAfterId } = questionEditorContext;
+      const slice = state.slices.find(s => s.id === sliceId);
+      if (!slice) return;
+      const questionText = document.getElementById('editQQuestion').value.trim();
+      const answerHtml = document.getElementById('editQAnswer').innerHTML.trim();
+      if (!questionText || !stripHtmlToPlainText(answerHtml)) {
+        showAlert('Заполни вопрос и ответ.');
+        return;
+      }
+      const category = document.getElementById('editQCategory').value.trim() || 'Общая тема';
+      const ttsQuestion = document.getElementById('editQTtsQuestion').value.trim();
+      const ttsAnswer = document.getElementById('editQTtsAnswer').value.trim();
+      const feedbackNote = document.getElementById('editQFeedback').value.trim();
+      const code = document.getElementById('editQCode').value;
+      let savedId = questionId;
+      if (questionId) {
+        const item = slice.questions.find(q => q.id === questionId);
+        Object.assign(item, { category, question: questionText, ttsQuestion: ttsQuestion || `Вопрос ${item.number}. ${questionText}`, answerHtml, ttsAnswer: ttsAnswer || stripHtmlToPlainText(answerHtml), feedbackNote, code });
+      } else {
+        const insertIndex = insertAfterId ? slice.questions.findIndex(q => q.id === insertAfterId) + 1 : slice.questions.length;
+        const item = {
+          id: `${sliceId}-q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          number: insertIndex + 1, category, question: questionText,
+          ttsQuestion: ttsQuestion || `Вопрос ${insertIndex + 1}. ${questionText}`,
+          answerHtml, ttsAnswer: ttsAnswer || stripHtmlToPlainText(answerHtml), feedbackNote, code
+        };
+        slice.questions.splice(Math.max(0, insertIndex), 0, item);
+        savedId = item.id;
+      }
+      renumberQuestions(slice);
+      closeQuestionEditor();
+      refreshQuestionViews(sliceId, savedId);
+      showAlert(questionId ? 'Вопрос и ответ обновлены.' : 'Вопрос добавлен в выбранное место.');
+    }
+
+    function moveQuestion(questionId, direction) {
+      const slice = state.slices.find(s => s.id === state.currentSliceId);
+      if (!slice) return;
+      const index = slice.questions.findIndex(q => q.id === questionId);
+      const next = index + direction;
+      if (index < 0 || next < 0 || next >= slice.questions.length) return;
+      [slice.questions[index], slice.questions[next]] = [slice.questions[next], slice.questions[index]];
+      renumberQuestions(slice);
+      refreshQuestionViews(slice.id, questionId);
+    }
+
     // ==================== Динамическое добавление срезов и вопросов ====================
     function openBuilderModal(tab = 'question') {
       const modal = document.getElementById('builderModal');
@@ -2281,17 +2424,20 @@ p { color: blue; }`
 
     function toggleMobileSettings(open) {
       const drawer = document.getElementById('settingsDrawer');
-      const overlay = document.getElementById('mobileSettingsOverlay');
-      if (open) {
-        drawer.classList.remove('translate-y-full');
-        drawer.classList.add('translate-y-0');
-        overlay.classList.remove('hidden');
-      } else {
-        drawer.classList.add('translate-y-full');
-        drawer.classList.remove('translate-y-0');
-        overlay.classList.add('hidden');
-      }
+      if (!drawer) return;
+      drawer.classList.toggle('hidden', !open);
+      drawer.classList.toggle('flex', open);
+      document.body.classList.toggle('overflow-hidden', open);
     }
+
+    function moveCurrentQuestion(direction) {
+      const item = getCurrentQuestion();
+      if (item) moveQuestion(item.id, direction);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') toggleMobileSettings(false);
+    });
 
     function showAlert(message) {
       document.getElementById('alertText').textContent = message;
@@ -2348,5 +2494,28 @@ p { color: blue; }`
       });
     }
   </script>
+
+  <!-- Редактор вопроса -->
+  <div id="questionEditorModal" class="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div><h2 id="questionEditorTitle" class="text-sm font-semibold text-white">Редактировать вопрос</h2><p id="questionEditorHint" class="text-xs text-slate-400 mt-1">Изменения сохраняются на этом устройстве</p></div>
+        <button type="button" onclick="closeQuestionEditor()" class="p-2 text-slate-400 hover:text-white">✕</button>
+      </div>
+      <form id="questionEditorForm" onsubmit="saveQuestionEditor(event)" class="p-4 sm:p-5 overflow-y-auto space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="text-xs text-slate-300">Тема<input id="editQCategory" required class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white"></label>
+          <label class="text-xs text-slate-300">Текст для озвучки вопроса (необязательно)<input id="editQTtsQuestion" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white"></label>
+        </div>
+        <label class="block text-xs text-slate-300">Вопрос<textarea id="editQQuestion" required rows="3" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white"></textarea></label>
+        <label class="block text-xs text-slate-300">Ответ <span class="text-slate-500">(можно редактировать форматирование прямо в поле)</span><div id="editQAnswer" contenteditable="true" class="mt-1 min-h-36 max-h-72 overflow-y-auto rounded-lg bg-slate-800 border border-slate-700 px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></div></label>
+        <label class="block text-xs text-slate-300">Текст ответа для озвучки<textarea id="editQTtsAnswer" rows="2" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white"></textarea></label>
+        <label class="block text-xs text-slate-300">Частые ошибки / фидбэк<input id="editQFeedback" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white"></label>
+        <label class="block text-xs text-slate-300">Пример кода<textarea id="editQCode" rows="3" class="mt-1 w-full font-mono rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white"></textarea></label>
+        <div class="pt-2 flex justify-end gap-2"><button type="button" onclick="closeQuestionEditor()" class="px-4 py-2 rounded-lg border border-slate-700 text-xs text-slate-300">Отмена</button><button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white">Сохранить</button></div>
+      </form>
+    </div>
+  </div>
+
 </body>
 </html>
